@@ -1,13 +1,15 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
 namespace AtmosphereApproach
 {
-    /// <summary>The runway currently tuned in NavInstruments, copied out of its Runway object.</summary>
+    /// <summary>A runway known to NavInstruments, copied out of its Runway object.</summary>
     public sealed class RunwayInfo
     {
+        public int index = -1;      // position in NavInstruments' list for the current body (rwyIdx)
         public string ident = "---";
         public string shortID = "---";
         public string body = "";
@@ -56,6 +58,9 @@ namespace AtmosphereApproach
 
         static object lastRunwayObject;
         static RunwayInfo lastRunway;
+        static readonly List<RunwayInfo> runwayList = new List<RunwayInfo>();
+        static string runwayListBody = "";
+        static int runwayListCount = -1;
         static bool readFailureLogged;
 
         public static bool Available { get { Resolve(); return available; } }
@@ -205,6 +210,75 @@ namespace AtmosphereApproach
             r.innerMarkerDist = (float)rwyFields[11].GetValue(rwy);
             r.isINSTarget = (bool)rwyFields[12].GetValue(rwy);
             return r;
+        }
+
+        /// <summary>
+        /// Runways of the current body, in NavInstruments' order. NavInstruments refills the same list
+        /// object on a body change (and its runway editor can add or remove entries), so the copy is
+        /// rebuilt when the body or the count differs.
+        /// </summary>
+        public static IList<RunwayInfo> Runways
+        {
+            get
+            {
+                if (!Available)
+                    return runwayList;
+                try
+                {
+                    IList list = fCurrentBodyRunways.GetValue(null) as IList;
+                    int count = list == null ? 0 : list.Count;
+                    string body = count > 0 ? (string)rwyFields[2].GetValue(list[0]) : "";
+                    if (count != runwayListCount || body != runwayListBody)
+                    {
+                        runwayList.Clear();
+                        for (int i = 0; i < count; i++)
+                        {
+                            RunwayInfo r = Copy(list[i]);
+                            r.index = i;
+                            runwayList.Add(r);
+                        }
+                        runwayListCount = count;
+                        runwayListBody = body;
+                    }
+                }
+                catch (Exception e) { LogReadFailure(e); }
+                return runwayList;
+            }
+        }
+
+        /// <summary>Index of the tuned runway in <see cref="Runways"/> (rwyIdx), -1 without NavInstruments.</summary>
+        public static int SelectedIndex
+        {
+            get
+            {
+                if (!Available)
+                    return -1;
+                try { return (int)fRwyIdx.GetValue(null); }
+                catch (Exception e) { LogReadFailure(e); return -1; }
+            }
+        }
+
+        /// <summary>True while a stock waypoint is active: NavInstruments flies an INS target and the HSI refuses runway changes.</summary>
+        public static bool SelectionLocked
+        {
+            get
+            {
+                RunwayInfo rwy = SelectedRunway;
+                return rwy != null && rwy.isINSTarget;
+            }
+        }
+
+        /// <summary>Tunes a runway by its index in <see cref="Runways"/>; the HSI follows. False when locked or out of range.</summary>
+        public static bool SelectRunway(int index)
+        {
+            if (!Available || SelectionLocked || index < 0 || index >= RunwayCount)
+                return false;
+            try
+            {
+                fRwyIdx.SetValue(null, index);
+                return true;
+            }
+            catch (Exception e) { LogReadFailure(e); return false; }
         }
 
         public static int RunwayCount { get { return CountOf(fCurrentBodyRunways); } }

@@ -8,9 +8,9 @@ namespace AtmosphereApproach
     /// <summary>
     /// APR mode: arms on the runway tuned in NavInstruments, captures localizer then glideslope and
     /// flies the approach down to the decision height, where it hands the aircraft back to the pilot.
-    /// Listed by AtmosphereAutopilot as one of its high-level autopilots. While off or armed a
-    /// delegated AA controller (Cruise Flight or Fly-By-Wire) flies; from localizer capture on,
-    /// this module steers through AA's Director controller.
+    /// Listed by AtmosphereAutopilot as one of its high-level autopilots. Armed, it only watches
+    /// from the background while Cruise Flight or Fly-By-Wire keeps flying; at localizer capture it
+    /// selects itself in the manager and steers through AA's Director controller.
     /// </summary>
     public sealed class ApproachController : StateController
     {
@@ -22,6 +22,7 @@ namespace AtmosphereApproach
         internal ApproachController(Vessel v) : base(v, "Approach controller", 0x41415052)
         {
             window.width = 300.0f;
+            runway_list = new RunwayListWindow(v);
         }
 
         FlightModel imodel;
@@ -30,6 +31,7 @@ namespace AtmosphereApproach
         StandardFlyByWire fbw;
         CruiseController cruise;
         TopModuleManager manager;
+        readonly RunwayListWindow runway_list;
 
         public override void InitializeDependencies(Dictionary<Type, AutopilotModule> modules)
         {
@@ -58,78 +60,117 @@ namespace AtmosphereApproach
                 if (value == Armed)
                     return;
                 if (value)
-                {
-                    RunwayInfo rwy = NavBridge.SelectedRunway;
-                    if (rwy == null || rwy.body != vessel.mainBody.name)
-                    {
-                        MessageManager.post_quick_message("APR: no runway tuned on this body");
-                        Debug.Log(Tag + "arm refused: no runway on " + vessel.mainBody.name);
-                        return;
-                    }
-                    state = ApproachState.Armed;
-                    MessageManager.post_status_message("APR armed: " + rwy.shortID);
-                    Debug.Log(Tag + "armed on " + rwy.shortID);
-                }
+                    Arm();
                 else
-                {
-                    state = ApproachState.Off;
-                    gate = "";
-                    if (Active)
-                        FlyByApproach(false);
-                    MessageManager.post_status_message("APR off");
-                    Debug.Log(Tag + "disarmed");
-                }
+                    Disarm(null);
             }
+        }
+
+        /// <summary>Arms on the tuned runway, or says why not. Repeats the message when already armed.</summary>
+        void Arm()
+        {
+            RunwayInfo rwy = NavBridge.SelectedRunway;
+            if (rwy == null || rwy.body != vessel.mainBody.name)
+            {
+                MessageManager.post_status_message("APR not armed: no runway tuned on " + vessel.mainBody.name);
+                Debug.Log(Tag + "arm refused: no runway on " + vessel.mainBody.name);
+                return;
+            }
+            if (!Armed)
+            {
+                state = ApproachState.Armed;
+                gate = "";
+                Debug.Log(Tag + "armed on " + rwy.shortID);
+            }
+            MessageManager.post_status_message("APR armed on " + rwy.shortID + " - waiting for LOC");
+        }
+
+        void Disarm(string reason)
+        {
+            state = ApproachState.Off;
+            gate = "";
+            MessageManager.post_status_message(reason == null ? "APR off" : "APR off: " + reason);
+            Debug.Log(Tag + "disarmed" + (reason == null ? "" : " (" + reason + ")"));
+            if (Active)
+                HandBack(false);
         }
 
         #endregion
 
         #region Who flies
 
-        // Controller flying the aircraft while APR is not steering; activated from inside this module
-        // the same way Cruise Flight activates its director, and released before APR takes over.
-        StateController underlying;
-
-        // True from localizer capture on: this module owns the Director, thrust controller and model.
+        // True while this module steers through the Director, from localizer capture on.
         bool steering;
 
-        StateController Underlying { get { return armed_with_cruise ? (StateController)cruise : fbw; } }
+        // Controller to give the seat back to (Cruise Flight or Fly-By-Wire): the one flying when
+        // APR engaged or was selected by hand. Fly-By-Wire when nothing better was flying.
+        Type return_to = typeof(StandardFlyByWire);
 
-        void TakeDelegate(StateController c)
+        // Engage() sets engaging so OnActivate knows the capture put this module in the seat; a manual
+        // selection sets bounce_pending instead, and the flight addon hands the seat back next frame.
+        bool engaging;
+        internal bool bounce_pending;
+
+        // Set around hand-backs that leave this module armed: OnDeactivate then keeps the state.
+        bool keep_state;
+
+        // The manager updates its private active_controller field only after Activate() of the new
+        // controller: read during OnActivate it still names the controller that was flying.
+        static readonly System.Reflection.FieldInfo manager_active_field = typeof(TopModuleManager).GetField(
+            "active_controller", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        void RememberReturn()
         {
-            c.Activate();
-            underlying = c;
+            object flying = manager_active_field != null ? manager_active_field.GetValue(manager) : null;
+            return_to = flying == cruise ? typeof(CruiseController) : typeof(StandardFlyByWire);
         }
 
-        void ReleaseDelegate()
+        /// <summary>Localizer captured from the background: take the manager's seat.</summary>
+        void Engage()
         {
-            if (underlying == null)
-                return;
-            underlying.Deactivate();
-            underlying = null;
+            RememberReturn();
+            engaging = true;
+            manager.activateAutopilot(typeof(ApproachController));
+            global::AtmosphereAutopilot.AtmosphereAutopilot.Instance.mainMenuGUIUpdate();
         }
 
-        /// <summary>Switches between the delegated controller (false) and APR's own steering (true).</summary>
-        void FlyByApproach(bool on)
+        /// <summary>Gives the seat back to the controller that flew before; the APR state survives if asked.</summary>
+        void HandBack(bool stay_armed)
         {
-            if (on == steering)
+            if (!Active)
                 return;
-            if (on)
-            {
-                ReleaseDelegate();
-                dir_c.Activate();
-                thrust_c.Activate();
-                imodel.Activate();
-                steering = true;
-            }
-            else
-            {
-                dir_c.Deactivate();
-                thrust_c.Deactivate();
-                imodel.Deactivate();
-                steering = false;
-                TakeDelegate(Underlying);
-            }
+            Debug.Log(Tag + "handing control back to " + return_to.Name + (stay_armed ? ", still armed" : ""));
+            keep_state = stay_armed;
+            manager.activateAutopilot(return_to);
+            keep_state = false;
+            global::AtmosphereAutopilot.AtmosphereAutopilot.Instance.mainMenuGUIUpdate();
+        }
+
+        /// <summary>Selected by hand: nothing to fly before capture, so the addon calls this next frame.</summary>
+        internal void Bounce()
+        {
+            bounce_pending = false;
+            HandBack(true);
+        }
+
+        void StartSteering()
+        {
+            if (steering)
+                return;
+            dir_c.Activate();
+            thrust_c.Activate();
+            imodel.Activate();
+            steering = true;
+        }
+
+        void StopSteering()
+        {
+            if (!steering)
+                return;
+            dir_c.Deactivate();
+            thrust_c.Deactivate();
+            imodel.Deactivate();
+            steering = false;
         }
 
         #endregion
@@ -151,10 +192,6 @@ namespace AtmosphereApproach
         [GlobalSerializable("min_final_dme")]
         [AutoGuiAttr("min final DME (m)", true, "G5")]
         public double min_final_dme = 5000.0;
-
-        [GlobalSerializable("armed_with_cruise")]
-        [AutoGuiAttr("Arm over Cruise Flight", true)]
-        public bool armed_with_cruise = true;
 
         [GlobalSerializable("couple_speed_control")]
         [AutoGuiAttr("Couple AA speed control", true)]
@@ -198,10 +235,32 @@ namespace AtmosphereApproach
         bool show_advanced = false;
         bool shrink_window = false;
 
-        // Polled by ApproachHotkeys in every flight frame, not here: AA only updates the active module.
+        // Polled by ApproachAddon in every flight frame, not here: AA only updates the active module.
         [GlobalSerializable("apr_arm_key")]
         [AutoHotkeyAttr("APR arm/disarm")]
         internal static KeyCode apr_arm_key = KeyCode.None;
+
+        // Runway list window: position and preferences, persisted with the controller's own settings.
+        [GlobalSerializable("rwy_list_x")]
+        public float RwyListLeft { get { return runway_list.Left; } set { runway_list.Left = value; } }
+        [GlobalSerializable("rwy_list_y")]
+        public float RwyListTop { get { return runway_list.Top; } set { runway_list.Top = value; } }
+        [GlobalSerializable("rwy_sort")]
+        public int RwySort { get { return runway_list.sort; } set { runway_list.sort = value; } }
+        [GlobalSerializable("rwy_sort_desc")]
+        public bool RwySortDesc { get { return runway_list.sort_desc; } set { runway_list.sort_desc = value; } }
+        [GlobalSerializable("rwy_filter_dist")]
+        public bool RwyFilterDist { get { return runway_list.filter_dist; } set { runway_list.filter_dist = value; } }
+        [GlobalSerializable("rwy_max_dist_km")]
+        public int RwyMaxDistKm { get { return runway_list.max_dist_km; } set { runway_list.max_dist_km = value; } }
+        [GlobalSerializable("rwy_filter_relbrg")]
+        public bool RwyFilterRelBrg { get { return runway_list.filter_relbrg; } set { runway_list.filter_relbrg = value; } }
+        [GlobalSerializable("rwy_relbrg_deg")]
+        public int RwyRelBrgDeg { get { return runway_list.relbrg_deg; } set { runway_list.relbrg_deg = value; } }
+        [GlobalSerializable("rwy_filter_intercept")]
+        public bool RwyFilterIntercept { get { return runway_list.filter_intercept; } set { runway_list.filter_intercept = value; } }
+        [GlobalSerializable("rwy_intercept_deg")]
+        public int RwyInterceptDeg { get { return runway_list.intercept_deg; } set { runway_list.intercept_deg = value; } }
 
         #endregion
 
@@ -210,27 +269,39 @@ namespace AtmosphereApproach
         protected override void OnActivate()
         {
             NavBridge.EnsureNavAids();
-            state = ApproachState.Off;
-            gate = "";
-            steering = false;
-            TakeDelegate(Underlying);
-            MessageManager.post_status_message("Approach controller enabled");
+            if (engaging)
+            {
+                engaging = false;
+                StartSteering();
+                Debug.Log(Tag + "engaged, flying the approach");
+                return;
+            }
+            // selected by hand from the manager: arm if a runway is tuned, then give the seat back
+            RememberReturn();
+            Arm();
+            bounce_pending = true;
         }
 
         protected override void OnDeactivate()
         {
-            if (steering)
+            StopSteering();
+            engaging = false;
+            bounce_pending = false;
+            if (!keep_state && state != ApproachState.Off)
             {
-                dir_c.Deactivate();
-                thrust_c.Deactivate();
-                imodel.Deactivate();
-                steering = false;
+                state = ApproachState.Off;
+                gate = "";
+                MessageManager.post_status_message("APR off");
+                Debug.Log(Tag + "disarmed: controller changed");
             }
-            else
-                ReleaseDelegate();
-            state = ApproachState.Off;
-            gate = "";
-            MessageManager.post_status_message("Approach controller disabled");
+        }
+
+        /// <summary>Per-frame work out of the seat: nav numbers for the window, capture watch when armed.</summary>
+        internal void BackgroundUpdate()
+        {
+            UpdateNavigation();
+            if (Armed && !vessel.LandedOrSplashed)
+                UpdateState();
         }
 
         #endregion
@@ -289,8 +360,7 @@ namespace AtmosphereApproach
             RunwayInfo rwy = NavBridge.SelectedRunway;
             if (!nav.valid || rwy == null || rwy.body != vessel.mainBody.name)
             {
-                Armed = false;
-                MessageManager.post_quick_message("APR off: runway lost");
+                Disarm("runway lost");
                 return;
             }
             double loc = Math.Abs(nav.locDeviation);
@@ -308,7 +378,10 @@ namespace AtmosphereApproach
                     {
                         hold_altitude = vessel.altitude;
                         Transition(ApproachState.Localizer, "localizer captured, holding " + hold_altitude.ToString("0") + " m");
-                        FlyByApproach(true);
+                        if (Active)
+                            StartSteering();
+                        else
+                            Engage();
                     }
                     break;
 
@@ -316,7 +389,7 @@ namespace AtmosphereApproach
                     if (loc > 3.0 * loc_capture_deg)
                     {
                         Transition(ApproachState.Armed, "localizer lost");
-                        FlyByApproach(false);
+                        HandBack(true);
                     }
                     else if (gs <= gs_capture_deg && (nav.gsDeviation <= 0.0f || allow_gs_from_above))
                         Transition(ApproachState.Glideslope, "glideslope captured");
@@ -331,7 +404,7 @@ namespace AtmosphereApproach
                     if (loc > 3.0 * loc_capture_deg)
                     {
                         Transition(ApproachState.Armed, "localizer lost");
-                        FlyByApproach(false);
+                        HandBack(true);
                     }
                     else if (gs > 3.0 * gs_capture_deg)
                     {
@@ -360,10 +433,12 @@ namespace AtmosphereApproach
         /// <summary>Decision height reached: give the aircraft back to the pilot as configured.</summary>
         void Handover()
         {
-            MessageManager.post_quick_message("MINIMUMS - autopilot disconnected");
+            MessageManager.post_status_message("MINIMUMS - autopilot disconnected");
             Debug.Log(Tag + "handover at minimums: " + (handover_master_off ? "master off" : "Fly-By-Wire") +
                 " (above rwy " + height_above_runway.ToString("0") + " m, radar " + vessel.radarAltitude.ToString("0") + " m)");
-            // both paths call this module's Deactivate(), which resets the state and releases the Director
+            // both paths call this module's Deactivate(), which releases the Director
+            state = ApproachState.Off;
+            gate = "";
             if (handover_master_off)
                 manager.Active = false;
             else
@@ -371,13 +446,13 @@ namespace AtmosphereApproach
             global::AtmosphereAutopilot.AtmosphereAutopilot.Instance.mainMenuGUIUpdate();
         }
 
-        static double Wrap360(double a)
+        internal static double Wrap360(double a)
         {
             a %= 360.0;
             return a < 0.0 ? a + 360.0 : a;
         }
 
-        static double Wrap180(double a)
+        internal static double Wrap180(double a)
         {
             a = Wrap360(a);
             return a > 180.0 ? a - 360.0 : a;
@@ -392,27 +467,19 @@ namespace AtmosphereApproach
 
         public override void ApplyControl(FlightCtrlState cntrl)
         {
-            if (vessel.LandedOrSplashed)
+            if (vessel.LandedOrSplashed || bounce_pending)
                 return;
             UpdateNavigation();
             UpdateState();
+            if (!Active)
+                return;
             if (state == ApproachState.Minimums)
             {
                 Handover();
                 return;
             }
-            if (!steering)
-            {
-                if (underlying != Underlying)
-                {
-                    // option changed while active: swap the delegated controller
-                    ReleaseDelegate();
-                    TakeDelegate(Underlying);
-                }
-                underlying.ApplyControl(cntrl);
-                return;
-            }
-            Steer(cntrl);
+            if (steering)
+                Steer(cntrl);
         }
 
         /// <summary>
@@ -472,10 +539,17 @@ namespace AtmosphereApproach
         // by the window's return value, so the window is shrunk here and IMGUI refits it next frame.
         protected override void OnGUICustom()
         {
+            runway_list.OnGUI(window);
             if (!shrink_window)
                 return;
             shrink_window = false;
             window.height = 0.0f;
+        }
+
+        public override void UnShowGUI()
+        {
+            base.UnShowGUI();
+            runway_list.shown = false;
         }
 
         protected override void _drawGUI(int id)
@@ -505,7 +579,7 @@ namespace AtmosphereApproach
             GUILayout.Label("Runway", GUIStyles.labelStyleLeft, GUILayout.Width(55.0f));
             if (GUILayout.Button("<", GUIStyles.toggleButtonStyle, GUILayout.Width(25.0f)))
                 NavBridge.StepRunway(-1);
-            GUILayout.Label(rwy == null ? "no runway" : (rwy.isINSTarget ? "INS " : "") + rwy.shortID, GUIStyles.labelStyleLeft, GUILayout.Width(90.0f));
+            runway_list.shown = GUILayout.Toggle(runway_list.shown, rwy == null ? "no runway" : (rwy.isINSTarget ? "INS " : "") + rwy.shortID, GUIStyles.toggleButtonStyle, GUILayout.Width(90.0f));
             if (GUILayout.Button(">", GUIStyles.toggleButtonStyle, GUILayout.Width(25.0f)))
                 NavBridge.StepRunway(1);
             GUILayout.EndHorizontal();
@@ -559,7 +633,7 @@ namespace AtmosphereApproach
         string FlyingText()
         {
             if (!steering)
-                return (underlying != null ? underlying.ModuleName : "no controller") + " flies";
+                return (cruise.Active ? cruise.ModuleName : fbw.Active ? fbw.ModuleName : "pilot") + " flies";
             if (state == ApproachState.Localizer)
                 return "APR flies: hdg " + desired_heading.ToString("000") + "   hold " + hold_altitude.ToString("0") + " m   V/S " + desired_vspeed.ToString("+0.0;-0.0");
             return "APR flies: hdg " + desired_heading.ToString("000") + "   V/S " + desired_vspeed.ToString("+0.0;-0.0") + " m/s";

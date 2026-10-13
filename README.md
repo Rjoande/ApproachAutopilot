@@ -2,7 +2,7 @@
 
 This mod is an add-on for [AtmosphereAutopilot](https://github.com/Boris-Barboris/AtmosphereAutopilot) replicating an **APR** (ILS approach) mode: using reflection on [NavInstruments](https://github.com/linuxgurugamer/NavInstruments) for runway selection and flight parameters, the AP captures the localizer and the glideslope, and flies the approach down to the decision height, where it hands the plane back to you for the flare, the touchdown and the braking. Like the APR button on a general-aviation autopilot panel.
 
-> **Status: alpha.** The approach is flown end to end (localizer intercept and tracking, glideslope descent, hand-over at minimums). Expect rough edges in the tuning; feedback on the [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-atmosphereapproach-landing-controller-for-atmosphereautopilot/) is welcome.
+> **Status: 1.0.** The approach is flown end to end (localizer intercept and tracking, glideslope descent, hand-over at minimums). Tuning feedback on the [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-atmosphereapproach-landing-controller-for-atmosphereautopilot/) is welcome.
 
 ## How it works
 
@@ -35,19 +35,19 @@ Drop the `AtmosphereApproach` folder into `GameData`, so you end up with `GameDa
 ### Setting up
 
 1. In flight, open AtmosphereAutopilot's *Autopilot module manager* (Shift + master switch key, `P` by default) and switch the master on.
-2. Select **Approach controller** and open its GUI. Cruise Flight starts flying the aircraft right away (heading and altitude hold, as you set them in its own window); untick *Arm over Cruise Flight* if you would rather hand-fly the intercept with Fly-By-Wire.
+2. Open the **Approach controller** GUI (the *GUI* button next to its name). There is no need to select it: keep flying with Cruise Flight (heading and altitude hold, as you set them in its own window) or Fly-By-Wire if you would rather hand-fly the intercept. Clicking the module itself arms it and returns to the previous controller, with a message saying so.
 3. Pick the runway and the glideslope with the `<` `>` buttons. The selection is the same as the NavInstruments HSI: changing it in either window updates the other.
-4. Optionally bind the *APR arm/disarm* key in AtmosphereAutopilot's *Hotkeys manager*: it arms from any autopilot, selecting the Approach controller and switching the master on if needed.
+4. Optionally bind the *APR arm/disarm* key in AtmosphereAutopilot's *Hotkeys manager*: it arms and disarms from any autopilot without touching the manager.
 
 ### Flying the approach
 
 1. **Intercept.** Fly towards the extended centerline at 30 degrees or less, 6 to 10 km from the threshold, **below** the glideslope. The window helps: *GS at X km: Y m MSL* is the altitude of the beam at the outer marker, *intercept hdg* is the suggested heading, *xtk* is your distance from the centerline (R/L).
-2. **Arm.** Press **APR** (button or hotkey). The state reads *ARMED* and the line below says what APR is waiting for: *waiting LOC*, *too close* (fly out beyond the minimum final distance and re-intercept), or *intercept angle* (you are flying away from the runway).
-3. **Localizer.** When the localizer deviation enters the capture band (2 degrees by default) APR takes over from Cruise Flight / Fly-By-Wire, turns onto the centerline and holds the altitude it had at capture. The window shows the commanded heading and vertical speed and *below GS* with the current deviation.
+2. **Arm.** Press **APR** (button or hotkey). The state reads *ARMED* and the line below says what APR is waiting for: *waiting LOC*, *too close* (fly out beyond the minimum final distance and re-intercept), or *intercept angle* (you are flying away from the runway). Like a real APR mode it does not go looking for the beam: whoever was flying keeps flying until capture.
+3. **Localizer.** When the localizer deviation enters the capture band (2 degrees by default) APR selects itself in the manager, takes over from Cruise Flight / Fly-By-Wire, turns onto the centerline and holds the altitude it had at capture. The window shows the commanded heading and vertical speed and *below GS* with the current deviation.
 4. **Glideslope.** When the beam comes down to you (within 0.35 degrees, from below) APR starts the descent and tracks localizer and glideslope together. Capture from above is refused by default: get below the beam and re-arm, or enable *Allow GS capture from above* under *Advanced*.
 5. **Minimums.** At the decision height (30 m above the runway by default, or the radar altitude if lower) the screen says *MINIMUMS - autopilot disconnected* and Fly-By-Wire gets the aircraft, with its AoA and G moderation to help the flare. Throttle, flare, touchdown and brakes are yours.
 
-Losing the localizer (beyond three times the capture band) hands the aircraft back to Cruise Flight / Fly-By-Wire with APR re-armed; losing the glideslope goes back to localizer tracking with altitude hold at the current altitude. Pressing APR again, selecting another controller in the manager or switching the master off disarms at any time.
+Losing the localizer (beyond three times the capture band) hands the aircraft back to Cruise Flight / Fly-By-Wire with APR still armed; losing the glideslope goes back to localizer tracking with altitude hold at the current altitude. Pressing APR again disarms at any time; while APR is flying, selecting another controller in the manager or switching the master off disarms too. An armed APR survives a master off and switches it back on at capture.
 
 ### Speed
 
@@ -55,7 +55,7 @@ The throttle is not touched by default, like a general-aviation autopilot withou
 
 ### Options
 
-Main window: *decision height* (per craft), *LOC capture*, *GS capture*, *min final DME*, *Arm over Cruise Flight*, *Couple AA speed control*, *Minimums: master off*. Under *Advanced*: maximum intercept angle, lateral time constant and look-ahead limits, height and vertical-speed gains, flight-path-angle margin, director strength multiplier, glideslope capture from above and decision height on radar altitude. Everything is saved in AtmosphereAutopilot's own settings files (`Global_settings.txt` and the per-craft `designs/` files).
+Main window: *decision height* (per craft), *LOC capture*, *GS capture*, *min final DME*, *Couple AA speed control*, *Minimums: master off*. Under *Advanced*: maximum intercept angle, lateral time constant and look-ahead limits, height and vertical-speed gains, flight-path-angle margin, director strength multiplier, glideslope capture from above and decision height on radar altitude. Everything is saved in AtmosphereAutopilot's own settings files (`Global_settings.txt` and the per-craft `designs/` files).
 
 ## Building
 

@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#fff5f5"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#e03131" stroke-width="2" stroke-opacity="0.45"/>
+    </pattern>
+    <marker id="arrowG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2b8a3e"/>
+    </marker>
+  </defs>
+
+  <!-- solid card: readable on GitHub light and dark themes -->
+  <rect x="0" y="0" width="800" height="600" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+
+  <!-- ================= PLAN VIEW ================= -->
+  <text x="20" y="30" font-size="15" font-weight="bold" fill="#1f2328">Plan view</text>
+  <text x="110" y="30" fill="#57606a">approaching runway 27 from the east</text>
+
+  <!-- too-close zone -->
+  <rect x="200" y="95" width="180" height="110" fill="url(#hatch)" stroke="#e03131" stroke-dasharray="4 3"/>
+  <text x="290" y="88" text-anchor="middle" fill="#c92a2a">too close: no capture</text>
+  <text x="290" y="222" text-anchor="middle" fill="#c92a2a" font-size="12">closer than min final DME (5 km)</text>
+
+  <!-- extended centerline -->
+  <line x1="200" y1="150" x2="780" y2="150" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="10 6"/>
+  <text x="775" y="170" text-anchor="end" fill="#57606a">extended centerline (localizer)</text>
+
+  <!-- runway -->
+  <rect x="60" y="141" width="140" height="18" rx="2" fill="#495057"/>
+  <line x1="70" y1="150" x2="190" y2="150" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="8 6"/>
+  <text x="130" y="182" text-anchor="middle" fill="#1f2328" font-weight="bold">Runway 27</text>
+
+  <!-- aircraft path: intercept (orange) then APR on the localizer (green) -->
+  <line x1="775" y1="25.8" x2="575" y2="141.3" stroke="#e8590c" stroke-width="2.5" stroke-dasharray="7 5"/>
+  <path d="M575,141.3 Q560,150 540,150 L235,150" fill="none" stroke="#2b8a3e" stroke-width="3" marker-end="url(#arrowG)"/>
+  <polygon points="13,0 -8,-7 -4,0 -8,7" fill="#e8590c" transform="translate(715,60.4) rotate(150)"/>
+  <text x="700" y="42" text-anchor="end" fill="#e8590c">fly the intercept hdg</text>
+
+  <!-- intercept angle -->
+  <path d="M630,150 A70,70 0 0 0 620.6,115" fill="none" stroke="#1f2328" stroke-width="1.2"/>
+  <text x="638" y="132" fill="#1f2328" font-weight="bold">30&#176; or less</text>
+
+  <!-- capture point -->
+  <circle cx="575" cy="141.3" r="5" fill="#ffffff" stroke="#2b8a3e" stroke-width="2.5"/>
+  <text x="520" y="125" text-anchor="end" fill="#2b8a3e" font-weight="bold">LOC capture</text>
+  <line x1="522" y1="128" x2="569" y2="139" stroke="#2b8a3e" stroke-width="1"/>
+
+  <!-- distance scale (km from threshold) -->
+  <g stroke="#57606a" stroke-width="1.2">
+    <line x1="200" y1="240" x2="740" y2="240"/>
+    <line x1="200" y1="235" x2="200" y2="245"/>
+    <line x1="380" y1="235" x2="380" y2="245"/>
+    <line x1="560" y1="235" x2="560" y2="245"/>
+    <line x1="740" y1="235" x2="740" y2="245"/>
+  </g>
+  <g fill="#57606a" font-size="12" text-anchor="middle">
+    <text x="200" y="260">0</text>
+    <text x="380" y="260">5 km</text>
+    <text x="560" y="260">10 km</text>
+    <text x="740" y="260">15 km</text>
+  </g>
+
+  <line x1="20" y1="285" x2="780" y2="285" stroke="#d0d7de"/>
+
+  <!-- ================= PROFILE ================= -->
+  <text x="20" y="312" font-size="15" font-weight="bold" fill="#1f2328">Profile</text>
+  <text x="80" y="312" fill="#57606a">(vertical scale exaggerated)</text>
+
+  <!-- above the glideslope: no capture by default -->
+  <polygon points="215,520 760,322 760,326 215,326" fill="#e03131" fill-opacity="0.07"/>
+  <text x="250" y="370" fill="#c92a2a">above the glideslope: no capture</text>
+  <text x="250" y="386" fill="#c92a2a" font-size="12">(unless "Allow GS capture from above" is on)</text>
+
+  <!-- ground / sea and runway -->
+  <line x1="40" y1="520" x2="780" y2="520" stroke="#8c959f" stroke-width="1.5"/>
+  <rect x="60" y="516" width="140" height="6" fill="#495057"/>
+
+  <!-- glideslope beam -->
+  <line x1="215" y1="520" x2="760" y2="322" stroke="#1971c2" stroke-width="2" stroke-dasharray="10 5"/>
+  <text x="690" y="330" fill="#1971c2" font-weight="bold" transform="rotate(-20 690 330)">glideslope 3&#176;</text>
+
+  <!-- flight path -->
+  <line x1="760" y1="425" x2="560" y2="425" stroke="#e8590c" stroke-width="2.5" stroke-dasharray="7 5"/>
+  <text x="755" y="415" text-anchor="end" fill="#e8590c">Cruise Flight: 450 m, below the beam</text>
+  <polyline points="560,425 476,425 236,512.4" fill="none" stroke="#2b8a3e" stroke-width="3"/>
+  <line x1="236" y1="512.4" x2="205" y2="519" stroke="#57606a" stroke-width="2" stroke-dasharray="2 4"/>
+
+  <!-- events -->
+  <circle cx="560" cy="425" r="5" fill="#ffffff" stroke="#2b8a3e" stroke-width="2.5"/>
+  <text x="565" y="448" fill="#2b8a3e">LOC capture: APR holds altitude</text>
+
+  <circle cx="476" cy="425" r="5" fill="#ffffff" stroke="#2b8a3e" stroke-width="2.5"/>
+  <text x="482" y="474" fill="#2b8a3e" font-weight="bold">GS capture from below</text>
+  <text x="482" y="490" fill="#2b8a3e">APR descends on the beam</text>
+
+  <circle cx="236" cy="512.4" r="5" fill="#ffffff" stroke="#1f2328" stroke-width="2.5"/>
+  <line x1="236" y1="518" x2="236" y2="532" stroke="#1f2328" stroke-width="1"/>
+  <text x="236" y="546" text-anchor="middle" fill="#1f2328" font-weight="bold">minimums (30 m): hand-over to the pilot</text>
+
+  <!-- legend -->
+  <g font-size="12" fill="#1f2328">
+    <line x1="430" y1="577" x2="470" y2="577" stroke="#e8590c" stroke-width="2.5" stroke-dasharray="7 5"/>
+    <text x="478" y="581">Cruise Flight (or you) flies</text>
+    <line x1="640" y1="577" x2="680" y2="577" stroke="#2b8a3e" stroke-width="3"/>
+    <text x="688" y="581">APR flies</text>
+  </g>
+</svg>

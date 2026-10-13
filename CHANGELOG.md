@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.0
+
+First complete release: arm, capture, approach and hand-over work as designed, with the runway list and the background arming below.
+
+### Added
+- **Runway list window**: click the runway name in the Approach window to open a list of the runways on the current body, sortable by name, heading, distance or intercept angle and filterable by distance, relative bearing and intercept angle.
+
+### Changed
+- **Arming no longer selects the Approach controller.** Like a real APR mode, an armed APR waits in the background while whatever was flying (Cruise Flight, Fly-By-Wire or you) keeps flying; at localizer capture it selects itself in the manager and takes over, and it gives the seat back to that controller on localizer loss or disarm. The manager works as usual meanwhile: switch between Fly-By-Wire and Cruise Flight freely.
+- Clicking **Approach controller** in the manager arms it (if a runway is tuned) and returns to the previous controller right away.
+- The APR hotkey only arms and disarms; it no longer touches the manager or the master switch.
+- All AtmosphereApproach messages now show top right, where AtmosphereAutopilot posts its own.
+
 ## v0.2.0
 
 ### Added

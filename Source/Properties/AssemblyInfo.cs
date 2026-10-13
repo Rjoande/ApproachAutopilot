@@ -6,10 +6,10 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyProduct("AtmosphereApproach")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Rjoande, GPL-3.0")]
 [assembly: ComVisible(false)]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
 
-[assembly: KSPAssembly("AtmosphereApproach", 0, 2)]
+[assembly: KSPAssembly("AtmosphereApproach", 1, 0)]
 // Loads AtmosphereAutopilot first (0.0.0 = no KSPAssembly declared) and refuses to load without it.
 [assembly: KSPAssemblyDependency("AtmosphereAutopilot", 0, 0)]
 // Install gate only: NavInstruments is reached by reflection.

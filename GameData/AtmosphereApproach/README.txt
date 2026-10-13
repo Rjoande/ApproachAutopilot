@@ -2,8 +2,9 @@ AtmosphereApproach (AAPR) - APR (ILS approach) mode for AtmosphereAutopilot
 ==========================================================================
 
 Adds an "Approach controller" to AtmosphereAutopilot's Autopilot module
-manager: arm it on the runway tuned in NavInstruments, it captures the
-localizer and the glideslope and flies the approach down to the decision
+manager: arm it on the runway tuned in NavInstruments while Fly-By-Wire
+or Cruise Flight keeps flying; at localizer capture it takes over, tracks
+localizer and glideslope and flies the approach down to the decision
 height. Flare, touchdown and braking stay with you.
 
 Requires (not bundled):
