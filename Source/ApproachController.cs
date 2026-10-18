@@ -193,9 +193,13 @@ namespace AtmosphereApproach
         [AutoGuiAttr("min final DME (m)", true, "G5")]
         public double min_final_dme = 5000.0;
 
-        [GlobalSerializable("couple_speed_control")]
-        [AutoGuiAttr("Couple AA speed control", true)]
-        public bool couple_speed_control = false;
+        [GlobalSerializable("apr_speed_control")]
+        [AutoGuiAttr("APR speed control", true)]
+        public bool apr_speed_control = false;
+
+        [VesselSerializable("vref")]
+        [AutoGuiAttr("speed at DH (m/s)", true, "G4")]
+        public double vref = 80.0;
 
         [GlobalSerializable("handover_master_off")]
         [AutoGuiAttr("Minimums: master off (else FBW)", true)]
@@ -231,6 +235,12 @@ namespace AtmosphereApproach
 
         [GlobalSerializable("use_radar_dh")]
         public bool use_radar_dh = true;
+
+        [GlobalSerializable("gs_speed_margin")]
+        public double gs_speed_margin = 15.0;
+
+        [GlobalSerializable("speed_decel")]
+        public double speed_decel = 1.0;
 
         bool show_advanced = false;
         bool shrink_window = false;
@@ -349,6 +359,48 @@ namespace AtmosphereApproach
 
         #endregion
 
+        #region Speed
+
+        double loc_capture_speed;   // m/s, base speed on the approach when AA's speed control is off
+
+        /// <summary>Highest speed that still slows down to vref at the decision height, decelerating at speed_decel.</summary>
+        double SpeedEnvelope()
+        {
+            // DME is measured from the glideslope antenna, where the beam starts: the beam reaches DH at DH / sin(gs) from it
+            double to_dh = Math.Max(0.0, nav.dme - decision_height / Math.Sin(Math.Max(nav.glideslope, 0.5) * Deg2Rad));
+            return Math.Sqrt(vref * vref + 2.0 * Math.Max(speed_decel, 0.0) * to_dh);
+        }
+
+        /// <summary>Speed to fly now: AA's setpoint (or the speed at localizer capture) capped by the envelope, never below vref.</summary>
+        double TargetSpeed()
+        {
+            double v_base;
+            if (thrust_c.spd_control_enabled)
+                v_base = thrust_c.setpoint.mps();
+            else if (state == ApproachState.Localizer || state == ApproachState.Glideslope)
+                v_base = loc_capture_speed;
+            else
+                v_base = vessel.srfSpeed;
+            return Math.Max(vref, Math.Min(v_base, SpeedEnvelope()));
+        }
+
+        /// <summary>Glideslope capture refused while APR flies the throttle and the energy cannot be lost by DH.</summary>
+        bool TooFastForGlideslope()
+        {
+            return apr_speed_control && vessel.srfSpeed > SpeedEnvelope() * (1.0 + gs_speed_margin / 100.0);
+        }
+
+        /// <summary>Throttle only: AA's speed control would also work the Brakes group, which stays with the pilot.</summary>
+        void ApplySpeed(FlightCtrlState cntrl)
+        {
+            bool use_breaks = thrust_c.use_breaks;
+            thrust_c.use_breaks = false;
+            thrust_c.ApplyControl(cntrl, (float)TargetSpeed());
+            thrust_c.use_breaks = use_breaks;
+        }
+
+        #endregion
+
         #region State machine
 
         double hold_altitude;       // altitude held while on the localizer, waiting for the glideslope
@@ -377,6 +429,7 @@ namespace AtmosphereApproach
                     else
                     {
                         hold_altitude = vessel.altitude;
+                        loc_capture_speed = vessel.srfSpeed;
                         Transition(ApproachState.Localizer, "localizer captured, holding " + hold_altitude.ToString("0") + " m");
                         if (Active)
                             StartSteering();
@@ -392,10 +445,17 @@ namespace AtmosphereApproach
                         HandBack(true);
                     }
                     else if (gs <= gs_capture_deg && (nav.gsDeviation <= 0.0f || allow_gs_from_above))
-                        Transition(ApproachState.Glideslope, "glideslope captured");
+                    {
+                        if (TooFastForGlideslope())
+                            TooFastGate();
+                        else
+                            Transition(ApproachState.Glideslope, "glideslope captured");
+                    }
                     else if (nav.gsDeviation > 0.0f)
                         gate = "above GS " + nav.gsDeviation.ToString("+0.00") + " deg" +
                             (allow_gs_from_above ? "" : ": no capture from above, get below the beam");
+                    else if (TooFastForGlideslope())
+                        TooFastGate();
                     else
                         gate = "below GS " + nav.gsDeviation.ToString("0.00") + " deg, holding " + hold_altitude.ToString("0") + " m";
                     break;
@@ -420,6 +480,15 @@ namespace AtmosphereApproach
             }
         }
 
+        void TooFastGate()
+        {
+            bool first = !gate.StartsWith("too fast");
+            gate = "too fast for GS: " + vessel.srfSpeed.ToString("0") + " m/s, max " +
+                (SpeedEnvelope() * (1.0 + gs_speed_margin / 100.0)).ToString("0") + ", slowing down";
+            if (first)
+                Debug.Log(Tag + "glideslope capture blocked, " + gate + " (DME " + nav.dme.ToString("0") + " m)");
+        }
+
         void Transition(ApproachState next, string message)
         {
             state = next;
@@ -427,7 +496,8 @@ namespace AtmosphereApproach
             MessageManager.post_status_message("APR: " + message);
             Debug.Log(Tag + message + " (DME " + nav.dme.ToString("0") + " m, LOC " + nav.locDeviation.ToString("0.00") +
                 ", GS " + nav.gsDeviation.ToString("0.00") + ", cross-track " + cross_track.ToString("+0;-0") +
-                " m, above rwy " + height_above_runway.ToString("0") + " m)");
+                " m, above rwy " + height_above_runway.ToString("0") + " m, spd " + vessel.srfSpeed.ToString("0") +
+                " m/s, target " + TargetSpeed().ToString("0") + ")");
         }
 
         /// <summary>Decision height reached: give the aircraft back to the pilot as configured.</summary>
@@ -489,8 +559,8 @@ namespace AtmosphereApproach
         /// </summary>
         void Steer(FlightCtrlState cntrl)
         {
-            if (couple_speed_control && thrust_c.spd_control_enabled)
-                thrust_c.ApplyControl(cntrl, thrust_c.setpoint.mps());
+            if (apr_speed_control)
+                ApplySpeed(cntrl);
 
             Vector3d planet2ves = vessel.ReferenceTransform.position - vessel.mainBody.position;
             Vector3d hor_v = Vector3d.Exclude(up, imodel.surface_v);
@@ -604,8 +674,8 @@ namespace AtmosphereApproach
             {
                 GUILayout.Label("DME " + (nav.dme / 1000.0).ToString("0.0") + " km   LOC " + nav.locDeviation.ToString("+0.0;-0.0") +
                     " deg   GS " + nav.gsDeviation.ToString("+0.00;-0.00") + " deg", GUIStyles.labelStyleLeft);
-                GUILayout.Label("above rwy " + height_above_runway.ToString("0") + " m   spd " + vessel.srfSpeed.ToString("0") + " m/s" +
-                    SpeedHoldText(), GUIStyles.labelStyleLeft);
+                DrawSpeed();
+                GUILayout.Label("above rwy " + height_above_runway.ToString("0") + " m   throttle: " + ThrottleOwner(), GUIStyles.labelStyleLeft);
                 GUILayout.Label("track " + track.ToString("000") + "   rwy " + nav.runwayHeading.ToString("000") + "   intercept " + intercept.ToString("+0;-0") +
                     " deg   xtk " + (Math.Abs(cross_track) / 1000.0).ToString("0.00") + (cross_track >= 0.0 ? " km R" : " km L"), GUIStyles.labelStyleLeft);
                 if (state == ApproachState.Armed)
@@ -639,13 +709,33 @@ namespace AtmosphereApproach
             return "APR flies: hdg " + desired_heading.ToString("000") + "   V/S " + desired_vspeed.ToString("+0.0;-0.0") + " m/s";
         }
 
-        string SpeedHoldText()
+        static GUIStyle red_label;
+
+        /// <summary>Current and suggested speed, shown whether or not APR flies the throttle; red above Mach 1.</summary>
+        void DrawSpeed()
         {
-            if (!couple_speed_control)
-                return "";
-            if (!thrust_c.spd_control_enabled)
-                return "   (speed control off)";
-            return "   hold " + thrust_c.setpoint.mps().ToString("0");
+            double spd = vessel.srfSpeed;
+            if (vessel.mach > 1.0)
+            {
+                if (red_label == null)
+                {
+                    red_label = new GUIStyle(GUIStyles.labelStyleLeft);
+                    red_label.normal.textColor = Color.red;
+                }
+                GUILayout.Label("spd " + spd.ToString("0") + " m/s   M " + vessel.mach.ToString("0.00") + "   slow down", red_label);
+                return;
+            }
+            double target = TargetSpeed();
+            double error = spd - target;
+            string text = Math.Abs(error) <= 3.0 ? "on speed" : error.ToString("+0;-0") + (error > 0.0 ? " fast" : " slow");
+            GUILayout.Label("spd " + spd.ToString("0") + " m/s   target " + target.ToString("0") + " m/s   " + text, GUIStyles.labelStyleLeft);
+        }
+
+        string ThrottleOwner()
+        {
+            if (steering)
+                return apr_speed_control ? "APR" : "pilot";
+            return thrust_c.Active && thrust_c.spd_control_enabled ? "AA" : "pilot";
         }
 
         void DrawAdvanced()
@@ -660,6 +750,8 @@ namespace AtmosphereApproach
             DrawNumber("director strength mult", ref strength_mult, "G3");
             allow_gs_from_above = GUILayout.Toggle(allow_gs_from_above, "Allow GS capture from above", GUIStyles.toggleButtonStyle);
             use_radar_dh = GUILayout.Toggle(use_radar_dh, "Decision height on radar altitude", GUIStyles.toggleButtonStyle);
+            DrawNumber("GS capture speed margin (%)", ref gs_speed_margin, "G3");
+            DrawNumber("speed envelope decel (m/s2)", ref speed_decel, "G3");
         }
 
         static void DrawNumber(string label, ref double value, string format)
