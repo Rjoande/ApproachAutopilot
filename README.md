@@ -4,7 +4,7 @@
 
 This mod is an add-on for [AtmosphereAutopilot](https://github.com/Boris-Barboris/AtmosphereAutopilot) replicating an **APR** (ILS approach) mode: using reflection on [NavInstruments](https://github.com/linuxgurugamer/NavInstruments) for runway selection and flight parameters, the AP captures the localizer and the glideslope, and flies the approach down to the decision height, where it hands the plane back to you for the flare, the touchdown and the braking. Like the APR button on a general-aviation autopilot panel.
 
-> **Status: 1.0.** The approach is flown end to end (localizer intercept and tracking, glideslope descent, hand-over at minimums). Approach speed control is coming in 1.1. Tuning feedback on the [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-approach-autopilot-landing-controller-for-atmosphereautopilot/) is welcome.
+> **Status: 1.1.** The approach is flown end to end (localizer intercept and tracking, glideslope descent, hand-over at minimums), with optional approach speed control. Tuning feedback on the [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-approach-autopilot-landing-controller-for-atmosphereautopilot/) is welcome.
 
 ## How it works
 
@@ -19,8 +19,8 @@ What it does:
 - **Glideslope capture** and descent on localizer + glideslope.
 - **Minimums**: at the decision height the autopilot announces it and hands the aircraft back to Fly-By-Wire (or switches the master off, by option).
 - Too close, above the glideslope or flying away from the runway: no capture, with the reason and an intercept hint shown in the window. Realistic, like a real APR mode: fly out and re-intercept.
-- No dependency on thrust: the throttle stays yours, with optional coupling to AtmosphereAutopilot's speed control for jets. Propeller and rotor aircraft work the same way.
-- Later: approach speed management, automatic vectors-to-final, go-around, and an unpowered / steep glide profile for shuttle-style landings.
+- **Speed**: optional APR speed control slows the aircraft down along the approach to the speed you want at the decision height (throttle only). Off by default: the throttle stays yours, and the window still shows the suggested speed for hand-flown approaches. Propeller and rotor aircraft fly the approach the same way.
+- Later: autoland (flare and rollout), automatic vectors-to-final, go-around, and an unpowered / steep glide profile for shuttle-style landings.
 
 ## Requirements
 
@@ -55,11 +55,13 @@ Losing the localizer (beyond three times the capture band) hands the aircraft ba
 
 ### Speed
 
-The throttle is not touched by default, like a general-aviation autopilot without autothrottle: set your approach speed by hand or with AtmosphereAutopilot's speed control. Tick *Couple AA speed control* to have APR keep the speed control setpoint during the approach (jets and rockets only: the thrust controller has no model for propellers or rotors).
+The window always shows your speed, the suggested speed and how far off you are (*on speed*, *+17 fast*, *-6 slow*); the line turns red above Mach 1. The suggested speed is AtmosphereAutopilot's speed setpoint if its speed control is on, otherwise the speed at localizer capture, capped so that the aircraft can still slow down to the *speed at DH* (80 m/s by default, per craft) by the decision height, and never below it.
+
+The throttle is not touched by default, like a general-aviation autopilot without autothrottle. Tick *APR speed control* to have APR fly the throttle to the suggested speed from localizer capture on, through AtmosphereAutopilot's thrust controller (jets and rockets: it has no model for propellers or rotors). Throttle only: airbrakes stay yours. If the aircraft is too fast to slow down in time, glideslope capture is held off (*too fast for GS*) while APR keeps the altitude on the localizer and slows down; if it is still too fast when the beam comes down, the approach is lost, like a real one flown high and fast. The window also says who has the throttle: *APR*, *AA* or *pilot*.
 
 ### Options
 
-Main window: *decision height* (per craft), *LOC capture*, *GS capture*, *min final DME*, *Couple AA speed control*, *Minimums: master off*. Under *Advanced*: maximum intercept angle, lateral time constant and look-ahead limits, height and vertical-speed gains, flight-path-angle margin, director strength multiplier, glideslope capture from above and decision height on radar altitude. Everything is saved in AtmosphereAutopilot's own settings files (`Global_settings.txt` and the per-craft `designs/` files).
+Main window: *decision height* (per craft), *LOC capture*, *GS capture*, *min final DME*, *APR speed control*, *speed at DH* (per craft), *Minimums: master off*. Under *Advanced*: maximum intercept angle, lateral time constant and look-ahead limits, height and vertical-speed gains, flight-path-angle margin, director strength multiplier, glideslope capture from above, decision height on radar altitude, GS capture speed margin and speed envelope deceleration. Everything is saved in AtmosphereAutopilot's own settings files (`Global_settings.txt` and the per-craft `designs/` files).
 
 ## Building
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - coming soon as Approach Autopilot v1.1.0
+## v1.1.0
 
 ### Added
 - **APR speed control** (off by default): APR flies the throttle from localizer capture on, slowing down gradually so it reaches the desired speed at the decision height (default 80 m/s). *APR speed control* button replaces *Couple AA speed control*.

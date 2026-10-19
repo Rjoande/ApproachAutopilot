@@ -5,7 +5,9 @@ Adds an "Approach controller" to AtmosphereAutopilot's Autopilot module
 manager: arm it on the runway tuned in NavInstruments while Fly-By-Wire
 or Cruise Flight keeps flying; at localizer capture it takes over, tracks
 localizer and glideslope and flies the approach down to the decision
-height. Flare, touchdown and braking stay with you.
+height. Optional APR speed control flies the throttle down to the speed
+you set for the decision height. Flare, touchdown and braking stay with
+you.
 
 Formerly AtmosphereApproach: if GameData/AtmosphereApproach is still
 installed, delete it (Approach Autopilot stays disabled until you do).
