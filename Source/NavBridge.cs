@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
-namespace AtmosphereApproach
+namespace ApproachAutopilot
 {
     /// <summary>A runway known to NavInstruments, copied out of its Runway object.</summary>
     public sealed class RunwayInfo
@@ -42,7 +42,7 @@ namespace AtmosphereApproach
     public static class NavBridge
     {
         const string DllName = "NavUtilitiesUpdated";
-        const string Tag = "[AtmosphereApproach] NavBridge: ";
+        const string Tag = "[ApproachAutopilot] NavBridge: ";
 
         static bool resolved;
         static bool available;

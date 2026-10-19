@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using AtmosphereAutopilot;
 using UnityEngine;
 
-namespace AtmosphereApproach
+namespace ApproachAutopilot
 {
     /// <summary>
     /// Per-frame flight addon for the Approach controller of the active vessel. AtmosphereAutopilot
@@ -13,7 +13,13 @@ namespace AtmosphereApproach
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class ApproachAddon : MonoBehaviour
     {
-        const string Tag = "[AtmosphereApproach] ";
+        const string Tag = "[ApproachAutopilot] ";
+
+        void Awake()
+        {
+            if (OldVersionCheck.Disabled)
+                Destroy(this);
+        }
 
         void Update()
         {

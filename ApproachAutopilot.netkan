@@ -1,6 +1,6 @@
 spec_version: v1.4
-identifier: AtmosphereApproach
-$kref: '#/ckan/github/Rjoande/AtmosphereApproach'
+identifier: ApproachAutopilot
+$kref: '#/ckan/github/Rjoande/ApproachAutopilot'
 $vref: '#/ckan/ksp-avc'
 x_netkan_version_edit: '^[vV]?(?<version>.+)$'
 x_netkan_github:

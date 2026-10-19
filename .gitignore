@@ -6,6 +6,7 @@ notes/
 dev/
 
 # Release packages
+ApproachAutopilot*.zip
 AtmosphereApproach*.zip
 
 # MSBuild output (Directory.Build.props sends it to LOCALAPPDATA; safety net)

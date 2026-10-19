@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using AtmosphereAutopilot;
 using UnityEngine;
 
-namespace AtmosphereApproach
+namespace ApproachAutopilot
 {
     /// <summary>
     /// Dedicated window listing the runways of the current body, sortable and filterable; a click on a

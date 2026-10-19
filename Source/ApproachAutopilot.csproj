@@ -5,8 +5,8 @@
     <TargetFramework>net472</TargetFramework>
     <!-- Same language level as AtmosphereAutopilot itself -->
     <LangVersion>7.3</LangVersion>
-    <AssemblyName>AtmosphereApproach</AssemblyName>
-    <RootNamespace>AtmosphereApproach</RootNamespace>
+    <AssemblyName>ApproachAutopilot</AssemblyName>
+    <RootNamespace>ApproachAutopilot</RootNamespace>
     <!-- Version and KSPAssembly attributes live in Properties/AssemblyInfo.cs -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <DebugType>none</DebugType>
@@ -59,7 +59,7 @@
   <!-- Single destination: the repo's payload folder (the installable mod, root of
        the release zip). Copying the DLL into a KSP install is a manual step. -->
   <Target Name="DeployToGameData" AfterTargets="Build">
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\GameData\AtmosphereApproach\Plugins\" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\..\GameData\ApproachAutopilot\Plugins\" />
   </Target>
 
 </Project>

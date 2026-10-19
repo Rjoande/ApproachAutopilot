@@ -1,9 +1,16 @@
 # Changelog
 
-## v1.1.0
+## [Unreleased] - coming soon as Approach Autopilot v1.1.0
 
 ### Added
 - **APR speed control** (off by default): APR flies the throttle from localizer capture on, slowing down gradually so it reaches the desired speed at the decision height (default 80 m/s). *APR speed control* button replaces *Couple AA speed control*.
+
+## v1.0.1
+
+AtmosphereApproach is now **Approach Autopilot**: same mod, same features as v1.0.0, new name.
+
+### Changed
+- New folder, `GameData/ApproachAutopilot`, and new repository, [Rjoande/ApproachAutopilot](https://github.com/Rjoande/ApproachAutopilot). **Delete `GameData/AtmosphereApproach` when upgrading**: while it is installed, Approach Autopilot stays disabled and a message in the main menu says so. Settings and hotkey carry over.
 
 ## v1.0.0
 
