@@ -4,7 +4,7 @@
 
 This mod is an add-on for [AtmosphereAutopilot](https://github.com/Boris-Barboris/AtmosphereAutopilot) replicating an **APR** (ILS approach) mode: using reflection on [NavInstruments](https://github.com/linuxgurugamer/NavInstruments) for runway selection and flight parameters, the AP captures the localizer and the glideslope, and flies the approach down to the decision height, where it hands the plane back to you for the flare, the touchdown and the braking. Like the APR button on a general-aviation autopilot panel.
 
-> **Status: 1.0.** The approach is flown end to end (localizer intercept and tracking, glideslope descent, hand-over at minimums). Approach speed control is coming in 1.1. Tuning feedback on the [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-atmosphereapproach-landing-controller-for-atmosphereautopilot/) is welcome.
+> **Status: 1.0.** The approach is flown end to end (localizer intercept and tracking, glideslope descent, hand-over at minimums). Approach speed control is coming in 1.1. Tuning feedback on the [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-approach-autopilot-landing-controller-for-atmosphereautopilot/) is welcome.
 
 ## How it works
 
