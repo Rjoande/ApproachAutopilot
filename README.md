@@ -30,7 +30,9 @@ What it does:
 
 ## Installation
 
-Drop the `ApproachAutopilot` folder into `GameData`, so you end up with `GameData/ApproachAutopilot/Plugins/ApproachAutopilot.dll`, next to `GameData/AtmosphereAutopilot` and `GameData/NavInstruments`.
+With [CKAN](https://github.com/KSP-CKAN/CKAN): search for **Approach Autopilot**; AtmosphereAutopilot and NavInstruments are installed with it.
+
+By hand: drop the `ApproachAutopilot` folder into `GameData`, so you end up with `GameData/ApproachAutopilot/Plugins/ApproachAutopilot.dll`, next to `GameData/AtmosphereAutopilot` and `GameData/NavInstruments`.
 
 **Upgrading from AtmosphereApproach** (the name of this mod up to v1.0.0): delete `GameData/AtmosphereApproach`. While it is installed, Approach Autopilot stays disabled and says so in the main menu. Your settings and hotkey carry over.
 
