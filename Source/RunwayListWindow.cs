@@ -14,9 +14,9 @@ namespace ApproachAutopilot
     {
         // Window id must be unique among every IMGUI window in the game: "AAPS" as bytes.
         const int WindowId = 0x41415053;
-        const float Width = 320.0f;
+        const float Width = 380.0f;
         const float ListHeight = 190.0f;
-        const float NameWidth = 80.0f, HdgWidth = 42.0f, DistWidth = 66.0f, InterceptWidth = 72.0f;
+        const float NameWidth = 140.0f, HdgWidth = 42.0f, DistWidth = 66.0f, InterceptWidth = 72.0f;
         const float FilterWidth = 96.0f, StepWidth = 25.0f, ValueWidth = 80.0f;
         const float RefreshPeriod = 1.0f;
         const double Deg2Rad = Math.PI / 180.0;
@@ -38,6 +38,7 @@ namespace ApproachAutopilot
         sealed class Row
         {
             public RunwayInfo rwy;
+            public string label;        // full runway name, shortened to fit the name column
             public double dist;         // meters, great circle to the localizer
             public double rel_bearing;  // degrees from the track to the runway, + = right
             public double intercept;    // track - runway heading, degrees, -180..180
@@ -86,7 +87,7 @@ namespace ApproachAutopilot
 
             GUILayout.BeginVertical();
             GUILayout.Label("Filter", GUIStyles.labelStyleLeft);
-            DrawFilter(ref filter_dist, "dist", ref max_dist_km, 25, 25, 1000, "< ", " km");
+            DrawFilter(ref filter_dist, "distance", ref max_dist_km, 25, 25, 1000, "< ", " km");
             DrawFilter(ref filter_relbrg, "rel bearing", ref relbrg_deg, 15, 15, 180, "", " deg");
             DrawFilter(ref filter_intercept, "intercept", ref intercept_deg, 15, 15, 90, "", " deg");
             GUILayout.Space(6.0f);
@@ -94,8 +95,8 @@ namespace ApproachAutopilot
             GUILayout.BeginHorizontal();
             DrawSortButton(SortKey.Name, "name", NameWidth);
             DrawSortButton(SortKey.Heading, "hdg", HdgWidth);
-            DrawSortButton(SortKey.Distance, "dist", DistWidth);
-            DrawSortButton(SortKey.Intercept, "intercept", InterceptWidth);
+            DrawSortButton(SortKey.Distance, "dist (km)", DistWidth);
+            DrawSortButton(SortKey.Intercept, "int. (deg)", InterceptWidth);
             GUILayout.EndHorizontal();
 
             scroll = GUILayout.BeginScrollView(scroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(ListHeight));
@@ -106,12 +107,14 @@ namespace ApproachAutopilot
                 bool sel = row.rwy.index == selected;
                 GUIStyle number = sel ? numberSelectedStyle : numberStyle;
                 GUILayout.BeginHorizontal();
-                string name = (sel && selected_filtered_out ? "* " : "") + row.rwy.shortID;
+                if (row.label == null)
+                    row.label = Fit(FullName(row.rwy), rowStyle, NameWidth);
+                string name = sel && selected_filtered_out ? Fit("* " + FullName(row.rwy), rowStyle, NameWidth) : row.label;
                 if (GUILayout.Button(name, sel ? rowSelectedStyle : rowStyle, GUILayout.Width(NameWidth)) && !locked)
                     NavBridge.SelectRunway(row.rwy.index);
                 GUILayout.Label(row.rwy.hdg.ToString("000"), number, GUILayout.Width(HdgWidth));
-                GUILayout.Label((row.dist / 1000.0).ToString("0.0") + " km", number, GUILayout.Width(DistWidth));
-                GUILayout.Label(row.intercept.ToString("+0;-0") + " deg", number, GUILayout.Width(InterceptWidth));
+                GUILayout.Label((row.dist / 1000.0).ToString("0.0"), number, GUILayout.Width(DistWidth));
+                GUILayout.Label(row.intercept.ToString("+0;-0"), number, GUILayout.Width(InterceptWidth));
                 GUILayout.EndHorizontal();
             }
             GUILayout.EndScrollView();
@@ -162,6 +165,27 @@ namespace ApproachAutopilot
             numberStyle = GUIStyles.labelStyleRight;
             numberSelectedStyle = new GUIStyle(numberStyle);
             numberSelectedStyle.normal.textColor = Color.green;
+        }
+
+        static string FullName(RunwayInfo rwy)
+        {
+            string name = rwy.ident != null ? rwy.ident.Trim() : "";
+            return name.Length > 0 ? name : rwy.shortID;
+        }
+
+        /// <summary>The text itself if it fits the column, else its longest prefix that fits followed by "...".</summary>
+        static string Fit(string text, GUIStyle style, float width)
+        {
+            float room = width - style.padding.horizontal;
+            if (style.CalcSize(new GUIContent(text)).x <= room)
+                return text;
+            for (int n = text.Length - 1; n > 0; n--)
+            {
+                string shortened = text.Substring(0, n).TrimEnd() + "...";
+                if (style.CalcSize(new GUIContent(shortened)).x <= room)
+                    return shortened;
+            }
+            return "...";
         }
 
         // Geometry is recomputed about once per second while the window is open, and at once after a
@@ -233,9 +257,9 @@ namespace ApproachAutopilot
             switch ((SortKey)sort)
             {
                 case SortKey.Name:
-                    c = string.CompareOrdinal(a.rwy.shortID, b.rwy.shortID);
+                    c = string.CompareOrdinal(FullName(a.rwy), FullName(b.rwy));
                     if (c == 0)
-                        c = string.CompareOrdinal(a.rwy.ident, b.rwy.ident);
+                        c = string.CompareOrdinal(a.rwy.shortID, b.rwy.shortID);
                     break;
                 case SortKey.Heading:
                     c = a.rwy.hdg.CompareTo(b.rwy.hdg);
