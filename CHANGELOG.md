@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## v1.1.1
 
 ### Changed
 - **Runways window**: runways are listed by their full name (e.g. *CMcAuliffe ILS 09L*) instead of the short code; the window is a bit wider, units moved into the column headers, and the distance filter reads *distance*.
