@@ -2,6 +2,6 @@
 
 New to it? Start with the **[Flight Manual](Flight-Manual)**: one complete approach to KSC runway 27, step by step.
 
-![](https://github.com/Rjoande/ApproachAutopilot/blob/main/images/fm-home.jpg)
+![](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-home.jpg)
 
 Download, requirements and installation: see the [repository](https://github.com/Rjoande/ApproachAutopilot). Questions and feedback: [forum thread](https://forum.kerbalspaceprogram.com/topic/231869-1125-approach-autopilot-landing-controller-for-atmosphereautopilot/).

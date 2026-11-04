@@ -37,7 +37,7 @@ For your first approach pick an aircraft that AtmosphereAutopilot's **Cruise Fli
 
 Take off from KSC and climb to about **1500 m**. Fly **east, out over the sea**: runway 27 is approached from the east, and flat water makes the first try easier.
 
-![Departing KSC eastbound over the sea](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-01-departure.jpg)
+![Departing KSC eastbound over the sea](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-01-departure.jpg)
 
 ---
 
@@ -62,13 +62,13 @@ So you will mostly *look at* the Approach window, not select the Approach contro
 2. Switch the **master** on and select **Cruise Flight**. Set its heading and altitude as usual.
 3. Click the **GUI** button next to **Approach controller**. Don't click the name: the window is all you need.
 
-![Autopilot module manager: Cruise Flight selected, GUI button of Approach controller](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-02-manager.jpg)
+![Autopilot module manager: Cruise Flight selected, GUI button of Approach controller](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-02-manager.jpg)
 
 > Clicked the name anyway? No harm done: APR arms (if a runway is tuned) and gives the seat straight back to the controller that was flying, with a message saying so.
 
 Here is the Approach window:
 
-![The Approach window, annotated](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-03-window-tour.png)
+![The Approach window, annotated](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-03-window-tour.png)
 
 | # | Line | What it tells you |
 |---|---|---|
@@ -97,21 +97,21 @@ Step with the **Runway** `<` `>` buttons until you see **SC27** (heading 270, el
 
 With a runway pack (or just to see what's around) click the runway name: the **Runways** window opens next to the Approach window.
 
-![The Runways window, annotated](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-04-runways.jpg)
+![The Runways window, annotated](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-04-runways.jpg)
 
-- **Columns**: name, runway heading, distance, intercept angle (the angle between your track and the runway). Click a column header to sort by it; click it again to reverse the order.
+- **Columns**: runway name, heading, distance in km, intercept angle in degrees (the angle between your track and the runway). Click a column header to sort by it; click it again to reverse the order.
 - **Click a runway name** to tune it. The window stays open, and the tuned runway is shown in green.
 - **Filters** (each one on/off, adjusted with `-` `+`, all combined):
 
 | Filter | Keeps runways... | Typical use |
 |---|---|---|
-| **dist** | closer than the distance shown | "what can I reach from here?" |
+| **distance** | closer than the distance shown | "what can I reach from here?" |
 | **rel bearing** | inside a cone ahead of you, with the total width shown | "runways in front of me", not behind |
 | **intercept** | whose heading is within the angle shown of your track | "runways I am already roughly lined up with" |
 
 **rel bearing** looks at *where* the runway is, **intercept** at *how it is oriented*. Together they answer the classic question: *which runway ahead of me can I land on without turning much?*
 
-> Example: flying back west towards KSC, switch on **rel bearing 120** and **intercept 30**, sort by **dist**: KSC 27 is at the top, with the Island runway 27 further down.
+> Example: flying back west towards KSC, switch on **rel bearing 120** and **intercept 30**, sort by **dist (km)**: KSC 27 is at the top, with the Island runway 27 further down.
 
 - A runway marked **`* `** is the tuned one, kept at the top even when the filters would hide it.
 - The footer shows how many runways pass the filters.
@@ -131,7 +131,7 @@ This part is flown by Cruise Flight (or by you). The goal is to reach the runway
 2. **Below the glideslope:** APR joins the glideslope **from below**, like a real ILS. Look at the *GS at 10.0 km: ... m MSL* line and stay **100-200 m lower** than that. For SC27 that's around **400-500 m**.
 3. **At a gentle angle:** cross the centerline at **30 degrees or less**, heading towards the runway. The *intercept hdg* in the window is a good heading to fly.
 
-![Intercept geometry: below the glideslope, 30 degree intercept, more than 5 km out](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-05-geometry.png)
+![Intercept geometry: below the glideslope, 30 degree intercept, more than 5 km out](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-05-geometry.png)
 
 In practice, from the sea east of KSC:
 
@@ -139,7 +139,7 @@ In practice, from the sea east of KSC:
 - Fly away from the runway until DME reads **15 km** or more, a few km to one side of the centerline.
 - Turn towards the centerline, using the **intercept hdg** shown in the window as Cruise Flight's heading.
 
-![Flying the intercept heading: Approach window and Cruise Flight window](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-06-vectors.jpg)
+![Flying the intercept heading: Approach window and Cruise Flight window](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-06-vectors.jpg)
 
 ---
 
@@ -153,7 +153,7 @@ You can arm at any time, long before the centerline. Three ways, all equivalent:
 
 Top right of the screen: **APR armed on SC27 - waiting for LOC**. The button reads **APR ARMED**, and **Cruise Flight keeps flying**: nothing changes in the cockpit.
 
-![APR ARMED: message top right, gate line "waiting LOC", Cruise Flight still flying](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-07-armed.jpg)
+![APR ARMED: message top right, gate line "waiting LOC", Cruise Flight still flying](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-07-armed.jpg)
 
 The gate line tells you what APR is waiting for:
 
@@ -178,7 +178,7 @@ When the localizer deviation enters the capture band (2 degrees by default):
 
 The gate line now reads **below GS -0.40 deg, holding 450 m**: exactly what you want. You fly level, under the glideslope, waiting for the beam to come down to you.
 
-![LOC captured: Approach controller active in the manager, "below GS" in the gate line](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-08-loc.jpg)
+![LOC captured: Approach controller active in the manager, "below GS" in the gate line](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-08-loc.jpg)
 
 ---
 
@@ -189,11 +189,11 @@ When the glideslope deviation reaches the capture band (0.35 degrees by default)
 - Top right: **APR: glideslope captured**. The button reads **LOC + GS captured**.
 - The aircraft pitches down and descends on the glideslope, tracking the centerline at the same time. The bottom line shows the commanded vertical speed.
 
-![LOC + GS captured: both deviations near zero](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-09-gs.jpg)
+![LOC + GS captured: both deviations near zero](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-09-gs.jpg)
 
 Now **watch your speed**: on a 3 degree slope a jet tends to accelerate. Pull the throttle back (see [Speed](#10-speed)).
 
-![Final approach, runway ahead](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-10-final_2.jpg)
+![Final approach, runway ahead](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-10-final_2.jpg)
 
 ---
 
@@ -206,9 +206,9 @@ At the **decision height** (30 m above the runway by default) APR disconnects:
 
 Now it's yours: **throttle to idle, flare, touch down, brakes**.
 
-![MINIMUMS: message top right, threshold just ahead](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-11-minimums.jpg)
+![MINIMUMS: message top right, threshold just ahead](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-11-minimums.jpg)
 
-![Touchdown](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-12-touchdown_1.jpg)
+![Touchdown](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-12-touchdown_1.jpg)
 
 Congratulations, that was your first automatic approach!
 
@@ -241,7 +241,7 @@ The **throttle:** line tells you:
 - **AA**: before capture, AtmosphereAutopilot's speed control (from Cruise Flight or Fly-By-Wire) is holding its setpoint.
 - **pilot**: you. Follow the spd line: *on speed* is within 3 m/s, otherwise it says how many m/s *fast* or *slow* you are.
 
-![spd and throttle lines with APR speed control on](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-14-speed.png)
+![spd and throttle lines with APR speed control on](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-14-speed.png)
 
 APR speed control works with **jets and rockets** only: AtmosphereAutopilot's thrust controller has no model for propellers or rotors. Propeller and rotor aircraft fly the approach exactly like jets; just keep the speed by hand, following the spd line.
 
@@ -285,7 +285,7 @@ APR behaves like a real approach mode: if it can't fly a stable approach, it won
 | *NavInstruments not found* in the Approach window | NavInstruments is missing or didn't load. | Install NavInstruments Continued 0.8.1+. |
 | No *Approach controller* in the manager | Approach Autopilot didn't load, or is disabled because the old GameData/AtmosphereApproach folder is still installed (the main menu says so). | Check that AtmosphereAutopilot and NavInstruments are installed, then look for `[ApproachAutopilot]` in `KSP.log`. |
 
-![Gate line examples: too close, above GS](https://github.com/Rjoande/AtmosphereApproach/blob/main/images/fm-13-refusals.png)
+![Gate line examples: too close, above GS](https://raw.githubusercontent.com/Rjoande/ApproachAutopilot/main/wiki/images/fm-13-refusals.png)
 
 ---
 
