@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Autoland** (off by default, per craft): with *Autoland* on, APR no longer disconnects at the decision height (it only calls *MINIMUMS*) and flies on down to the runway, keeping the localizer with small bank angles. Two styles:
+  - **Air Force style** (*Flare* on, default): an automatic flare that slows the descent down to about 0.6 m/s at touchdown.
+  - **Navy style** (*Flare* off): no flare, the glideslope is flown all the way to the deck.
+- With *APR speed control* on, **RETARD** brings the throttle to idle (5% by default, per craft) at the start of the flare, or at touchdown in Navy style.
+- After one second on the ground APR says *TOUCHDOWN* and hands the aircraft back like at minimums; if the aircraft bounces before that, APR keeps flying. Derotation, steering on the runway and braking stay with you.
+- **Autoland window** (*settings* next to the Autoland button): flare, touchdown sink rate, idle throttle and the **gear height**, measured by itself when the craft sits on the launch site, or with *Set gear height* whenever you are parked.
+
+### Fixed
+- An aircraft touching the ground before the decision height no longer leaves APR stuck in the manager: it hands over after one second on the ground.
+
+### Changed
+- **Default decision height is now 60 m** (about 200 ft, the usual ILS minimum) instead of 30 m: more room for a gentle flare without ballooning. Craft you already flew with APR keep their saved value; set *decision height* to 60 in the Approach window to switch them.
+
 ## v1.1.1
 
 ### Changed
