@@ -9,6 +9,9 @@
 - With *APR speed control* on, **RETARD** brings the throttle to idle (5% by default, per craft) at the start of the flare, or at touchdown in Navy style.
 - After one second on the ground APR says *TOUCHDOWN* and hands the aircraft back like at minimums; if the aircraft bounces before that, APR keeps flying. Derotation, steering on the runway and braking stay with you.
 - **Autoland window** (*settings* next to the Autoland button): flare, touchdown sink rate, idle throttle and the **gear height**, measured by itself when the craft sits on the launch site, or with *Set gear height* whenever you are parked.
+- **Aim point per runway**: some runway definitions put the glideslope antenna right on the threshold, so the aircraft touches down at the very start of the runway. In the Autoland window you can move the aim point down the runway for the tuned runway (e.g. 300 m); APR shifts its path gradually below the decision height. Saved per runway.
+- Below the decision height APR trusts the ground below (radar) over the published runway elevation, and disconnects with *TERRAIN* if the ground is well above runway level.
+- **Pitch authority warning**: if the elevator stays at its stop for a second while APR flies, APR says so (*raise speed at DH*): there is no margin left for the flare.
 
 ### Fixed
 - An aircraft touching the ground before the decision height no longer leaves APR stuck in the manager: it hands over after one second on the ground.
