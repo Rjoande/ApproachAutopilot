@@ -167,6 +167,8 @@ namespace ApproachAutopilot
             imodel.Activate();
             steering = true;
             retard = false;
+            pitch_limit_time = 0.0;
+            pitch_limit_warned = false;
         }
 
         void StopSteering()
@@ -286,6 +288,59 @@ namespace ApproachAutopilot
         [GlobalSerializable("touchdown_confirm")]
         public double touchdown_confirm = 1.0;
 
+        // Aim point offsets per runway (m down the runway beyond the glideslope antenna), for runways whose
+        // published antenna sits on the threshold. Stored as "body/ident:metres|..." in the global settings.
+        readonly Dictionary<string, double> aim_offsets = new Dictionary<string, double>();
+
+        [GlobalSerializable("aim_offsets")]
+        public string AimOffsetsText
+        {
+            get
+            {
+                List<string> parts = new List<string>();
+                foreach (KeyValuePair<string, double> kv in aim_offsets)
+                    if (kv.Value != 0.0)
+                        parts.Add(kv.Key + ":" + kv.Value.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+                return string.Join("|", parts.ToArray());
+            }
+            set
+            {
+                aim_offsets.Clear();
+                if (string.IsNullOrEmpty(value))
+                    return;
+                foreach (string part in value.Split('|'))
+                {
+                    int colon = part.LastIndexOf(':');
+                    double m;
+                    if (colon > 0 && double.TryParse(part.Substring(colon + 1), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out m))
+                        aim_offsets[part.Substring(0, colon)] = m;
+                }
+            }
+        }
+
+        static string RunwayKey(RunwayInfo rwy) { return rwy.body + "/" + rwy.ident; }
+
+        /// <summary>Aim point offset of the tuned runway, 0 when none is set.</summary>
+        internal double AimOffset()
+        {
+            RunwayInfo rwy = NavBridge.SelectedRunway;
+            double m;
+            return rwy != null && aim_offsets.TryGetValue(RunwayKey(rwy), out m) ? m : 0.0;
+        }
+
+        internal void SetAimOffset(double m)
+        {
+            RunwayInfo rwy = NavBridge.SelectedRunway;
+            if (rwy == null)
+                return;
+            aim_offsets[RunwayKey(rwy)] = m;
+            Debug.Log(Tag + "aim point offset " + m.ToString("0") + " m on " + RunwayKey(rwy));
+        }
+
+        const double AimRampDist = 600.0;   // m flown below minimums while the aim point moves to its offset
+        double final_along;                 // along_gs when Final began
+
         [GlobalSerializable("autoland_x")]
         public float AutolandLeft { get { return autoland_window.Left; } set { autoland_window.Left = value; } }
         [GlobalSerializable("autoland_y")]
@@ -397,13 +452,23 @@ namespace ApproachAutopilot
             runway_right = Vector3d.Exclude(up, vessel.east * Math.Cos(hdg) - vessel.north * Math.Sin(hdg)).normalized;
             Vector3d loc = vessel.mainBody.GetWorldSurfacePosition(rwy.locLatitude, rwy.locLongitude, rwy.altMSL);
             cross_track = Vector3d.Dot(vessel.ReferenceTransform.position - loc, runway_right);
-            // the ground below counts only at runway level: over the sea the ray finds the sea floor
+            Vector3d gs_ant = vessel.mainBody.GetWorldSurfacePosition(rwy.gsLatitude, rwy.gsLongitude, rwy.altMSL);
+            along_gs = Vector3d.Dot(gs_ant - vessel.ReferenceTransform.position, runway_dir);
+
+            // Radar first: the ground below is trusted within RunwayLevelTolerance of the published runway
+            // elevation (which can be metres off) and whenever it is higher still (terrain_high); only ground
+            // far below runway level (the sea floor, a valley) falls back to the published elevation.
             double root_alt = FlightGlobals.getAltitudeAtPos(vessel.vesselTransform.position, vessel.mainBody);
-            bool runway_level = ground_dist >= 0.0 && Math.Abs(root_alt - ground_dist - rwy.altMSL) < RunwayLevelTolerance;
-            gear_above = (runway_level ? ground_dist : root_alt - rwy.altMSL) - gear_height;
+            double ground_vs_runway = root_alt - ground_dist - rwy.altMSL;
+            bool use_radar = ground_dist >= 0.0 && ground_vs_runway >= -RunwayLevelTolerance;
+            terrain_high = ground_dist >= 0.0 && ground_vs_runway > RunwayLevelTolerance;
+            gear_above = (use_radar ? ground_dist : root_alt - rwy.altMSL) - gear_height;
         }
 
-        const double RunwayLevelTolerance = 10.0;   // m
+        const double RunwayLevelTolerance = 25.0;   // m
+
+        internal double along_gs;   // m along the runway course to the glideslope antenna, + = antenna still ahead
+        internal bool terrain_high; // ground below well above runway level
 
         /// <summary>
         /// Distance from the root part down to the ground along the local vertical, on the layer that holds
@@ -606,10 +671,15 @@ namespace ApproachAutopilot
                     }
                     else if (HeightForMinimums() < decision_height)
                     {
-                        if (autoland)
-                            Transition(ApproachState.Final, "MINIMUMS");
-                        else
+                        if (!autoland)
                             HandOverNext("MINIMUMS", "MINIMUMS - autopilot disconnected");
+                        else if (terrain_high)
+                            HandOverNext("terrain at minimums", "TERRAIN - autopilot disconnected");
+                        else
+                        {
+                            final_along = along_gs;
+                            Transition(ApproachState.Final, "MINIMUMS, aim point +" + AimOffset().ToString("0") + " m");
+                        }
                     }
                     break;
 
@@ -619,6 +689,8 @@ namespace ApproachAutopilot
                 case ApproachState.Flare:
                     if (loc > 3.0 * loc_capture_deg)
                         HandOverNext("localizer lost below minimums", "LOC lost - autopilot disconnected");
+                    else if (terrain_high)
+                        HandOverNext("terrain below minimums", "TERRAIN - autopilot disconnected");
                     else if (state == ApproachState.Final && flare && gear_above <= FlareHeight())
                     {
                         Transition(ApproachState.Flare, "FLARE");
@@ -780,6 +852,20 @@ namespace ApproachAutopilot
                 desired_vspeed = -(Math.Max(gear_above, 0.0) / tau + touchdown_sink);
                 vert_acc_mag = -vz / tau + flare_gain * (desired_vspeed - vz);
             }
+            else if (state == ApproachState.Final)
+            {
+                // below minimums the beam is replaced by the same straight path computed from the runway
+                // geometry (the beam angles blow up near the antenna), moved down the runway by the aim
+                // point offset over AimRampDist so that the change is gradual
+                double tan_gs = Math.Tan(nav.glideslope * Deg2Rad);
+                double offset = AimOffset();
+                double k = Common.Clamp((final_along - along_gs) / AimRampDist, 0.0, 1.0);
+                double shift_rate = k > 0.0 && k < 1.0 ? offset * vh / AimRampDist : 0.0;
+                double path_error = height_above_runway - (along_gs + offset * k) * tan_gs;    // m, + = above the path
+                desired_vspeed = (-vh + shift_rate) * tan_gs - height_gain * path_error;
+                desired_vspeed = Common.Clamp(desired_vspeed, -vh * Math.Tan((nav.glideslope + fpa_margin) * Deg2Rad), margin_vz);
+                vert_acc_mag = vspeed_gain * (desired_vspeed - vz);
+            }
             else
             {
                 double gs_error = nav.dme * Math.Tan(nav.gsDeviation * Deg2Rad);               // m, + = above the beam
@@ -798,6 +884,30 @@ namespace ApproachAutopilot
                 dir_c.strength *= strength_mult;
             dir_c.ApplyControl(cntrl, desired_velocity, level_acc + vert_acc);
             dir_c.strength = old_strength;
+            WatchPitchAuthority(cntrl);
+        }
+
+        const double PitchLimitInput = 0.95;    // |pitch input| counted as the elevator at its stop
+        const double PitchLimitTime = 1.0;      // s at the stop before the warning
+
+        double pitch_limit_time;
+        bool pitch_limit_warned;
+        internal bool PitchLimited { get { return pitch_limit_time >= PitchLimitTime; } }
+
+        /// <summary>Warns once per approach when the elevator stays at its stop: no margin left for the flare.</summary>
+        void WatchPitchAuthority(FlightCtrlState cntrl)
+        {
+            if (Math.Abs(cntrl.pitch) >= PitchLimitInput)
+                pitch_limit_time += TimeWarp.fixedDeltaTime;
+            else
+                pitch_limit_time = 0.0;
+            if (!PitchLimited || pitch_limit_warned)
+                return;
+            pitch_limit_warned = true;
+            MessageManager.post_status_message("APR: pitch authority limit - raise speed at DH");
+            Debug.Log(Tag + "pitch authority limit in " + state + ": pitch input " + cntrl.pitch.ToString("0.00") + ", AoA " +
+                (imodel.AoA(0) * Rad2Deg).ToString("0.0") + " deg, spd " + vessel.srfSpeed.ToString("0") + " m/s, V/S " +
+                vessel.verticalSpeed.ToString("0.0") + " m/s, above rwy " + height_above_runway.ToString("0") + " m");
         }
 
         #endregion
@@ -897,6 +1007,18 @@ namespace ApproachAutopilot
                 }
             }
             GUILayout.Label(FlyingText(), GUIStyles.labelStyleLeft);
+            if (steering && PitchLimited)
+                GUILayout.Label("PITCH LIMIT: elevator at its stop, raise speed at DH", RedLabel());
+        }
+
+        static GUIStyle RedLabel()
+        {
+            if (red_label == null)
+            {
+                red_label = new GUIStyle(GUIStyles.labelStyleLeft);
+                red_label.normal.textColor = Color.red;
+            }
+            return red_label;
         }
 
         string StateText()

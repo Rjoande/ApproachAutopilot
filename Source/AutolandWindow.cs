@@ -66,6 +66,17 @@ namespace ApproachAutopilot
                 GUILayout.Label("  RETARD needs APR speed control", GUIStyles.labelStyleLeft);
 
             GUILayout.Space(6.0f);
+            RunwayInfo rwy = NavBridge.SelectedRunway;
+            if (rwy != null)
+            {
+                GUILayout.Label("Runway " + rwy.ident, GUIStyles.labelStyleLeft);
+                double aim = apr.AimOffset();
+                ApproachController.DrawNumber("aim point past GS antenna (m)", ref aim, "0");
+                if (aim != apr.AimOffset())
+                    apr.SetAimOffset(aim);
+            }
+
+            GUILayout.Space(6.0f);
             double gear = apr.gear_height;
             ApproachController.DrawNumber("gear height (m)", ref apr.gear_height, "0.00");
             if (apr.gear_height != gear)
