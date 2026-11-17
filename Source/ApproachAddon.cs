@@ -53,8 +53,46 @@ namespace ApproachAutopilot
             Debug.Log(Tag + "APR hotkey fired (" + key + "), armed = " + apr.Armed);
         }
 
-        // Gear height measured on the launch site, waiting for the vessel's controller to exist.
+        readonly TouchdownTelemetry telemetry = new TouchdownTelemetry();
+        bool ui_hidden;
+
+        void Start()
+        {
+            GameEvents.onHideUI.Add(OnHideUI);
+            GameEvents.onShowUI.Add(OnShowUI);
+        }
+
+        void OnDestroy()
+        {
+            GameEvents.onHideUI.Remove(OnHideUI);
+            GameEvents.onShowUI.Remove(OnShowUI);
+        }
+
+        void OnHideUI() { ui_hidden = true; }
+        void OnShowUI() { ui_hidden = false; }
+
+        void OnGUI()
+        {
+            if (!ui_hidden)
+                telemetry.OnGUI();
+        }
+
+        void FixedUpdate()
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            global::AtmosphereAutopilot.AtmosphereAutopilot aa = global::AtmosphereAutopilot.AtmosphereAutopilot.Instance;
+            if (v == null || aa == null)
+                return;
+            double gear;
+            if (!launch_value.TryGetValue(v.id, out gear))
+                gear = 0.0;
+            telemetry.FixedUpdate(v, GetController(aa.getVesselModules(v)), gear);
+        }
+
+        // Gear height measured on the launch site, waiting for the vessel's controller to exist;
+        // launch_value keeps it for the landing log of craft that never create the controller.
         readonly Dictionary<Guid, double> launch_gear = new Dictionary<Guid, double>();
+        readonly Dictionary<Guid, double> launch_value = new Dictionary<Guid, double>();
         readonly HashSet<Guid> measured = new HashSet<Guid>();
         float still_time;
 
@@ -78,6 +116,7 @@ namespace ApproachAutopilot
                 return;
             measured.Add(v.id);
             launch_gear[v.id] = h;
+            launch_value[v.id] = h;
             Debug.Log(Tag + "gear height at launch: " + h.ToString("0.00") + " m (" + v.vesselName + ")");
         }
 
