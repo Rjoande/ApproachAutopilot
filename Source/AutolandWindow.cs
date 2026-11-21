@@ -6,8 +6,8 @@ namespace ApproachAutopilot
 {
     /// <summary>
     /// Autoland settings, opened from the Approach window: flare (Air Force style) or none (Navy style),
-    /// RETARD idle, flare tuning and the gear height, measured on the ground. Drawn by ApproachController
-    /// after its own window; everything is stored on the controller.
+    /// RETARD idle, flare tuning, derotation rate, and the gear height and ground pitch measured when
+    /// parked. Drawn by ApproachController after its own window; everything is stored on the controller.
     /// </summary>
     internal sealed class AutolandWindow
     {
@@ -64,6 +64,13 @@ namespace ApproachAutopilot
             ApproachController.DrawNumber("RETARD idle throttle (%)", ref apr.idle_throttle, "G3");
             if (!apr.apr_speed_control)
                 GUILayout.Label("  RETARD needs APR speed control", GUIStyles.labelStyleLeft);
+            ApproachController.DrawNumber("derotation rate (deg/s)", ref apr.derotation_rate, "G3");
+            apr.go_around = GUILayout.Toggle(apr.go_around, apr.go_around ? "High bounce: go around" : "High bounce: flare again", GUIStyles.toggleButtonStyle);
+            if (apr.go_around)
+            {
+                ApproachController.DrawNumber("go around above (m)", ref apr.go_around_bounce, "G3");
+                ApproachController.DrawNumber("climb to (m above rwy)", ref apr.go_around_height, "G4");
+            }
 
             GUILayout.Space(6.0f);
             RunwayInfo rwy = NavBridge.SelectedRunway;
@@ -81,16 +88,23 @@ namespace ApproachAutopilot
             ApproachController.DrawNumber("gear height (m)", ref apr.gear_height, "0.00");
             if (apr.gear_height != gear)
                 apr.gear_height_set = true;
+            double ground_pitch = apr.ground_pitch;
+            ApproachController.DrawNumber("ground pitch (deg)", ref apr.ground_pitch, "0.0");
+            if (apr.ground_pitch != ground_pitch)
+                apr.ground_pitch_set = true;
             bool parked = v.LandedOrSplashed && v.srfSpeed < ParkedSpeed && apr.ground_dist >= 0.0;
             GUI.enabled = parked;
             if (GUILayout.Button(parked ? "Set gear height: " + apr.ground_dist.ToString("0.00") + " m" : "Set gear height (park first)", GUIStyles.toggleButtonStyle))
             {
-                apr.SetGearHeight(apr.ground_dist, "set by the pilot");
-                MessageManager.post_status_message("APR: gear height " + apr.ground_dist.ToString("0.00") + " m");
+                double pitch = ApproachController.PitchOf(v);
+                apr.SetGearHeight(apr.ground_dist, pitch, "set by the pilot");
+                MessageManager.post_status_message("APR: gear height " + apr.ground_dist.ToString("0.00") + " m, ground pitch " + pitch.ToString("+0.0;-0.0") + " deg");
             }
             GUI.enabled = true;
             if (!apr.gear_height_set)
                 GUILayout.Label("gear height not measured: park and press Set", GUIStyles.labelStyleLeft);
+            else if (!apr.ground_pitch_set)
+                GUILayout.Label("ground pitch not measured: park and press Set", GUIStyles.labelStyleLeft);
 
             GUILayout.Space(6.0f);
             GUILayout.Label(StatusText(v), GUIStyles.labelStyleLeft);
@@ -104,6 +118,10 @@ namespace ApproachAutopilot
                 ApproachController.DrawNumber("flare height min (m)", ref apr.flare_h_min, "G3");
                 ApproachController.DrawNumber("flare height max (m)", ref apr.flare_h_max, "G3");
                 ApproachController.DrawNumber("touchdown confirm (s)", ref apr.touchdown_confirm, "G3");
+                ApproachController.DrawNumber("bounce height (m)", ref apr.bounce_height, "G3");
+                ApproachController.DrawNumber("ground pitch gain (1/s2)", ref apr.ground_kp, "G3");
+                ApproachController.DrawNumber("ground damping (1/s)", ref apr.ground_kd, "G3");
+                ApproachController.DrawNumber("ground integral (1/s3)", ref apr.ground_ki, "G3");
             }
             else if (was_advanced)
                 shrink = true;
@@ -113,6 +131,8 @@ namespace ApproachAutopilot
 
         string StatusText(Vessel v)
         {
+            if (apr.state == ApproachController.ApproachState.Touchdown)
+                return apr.GroundText();
             if (v.LandedOrSplashed)
                 return apr.ground_dist < 0.0 ? "no ground found below" : "gear above ground " + (apr.ground_dist - apr.gear_height).ToString("0.0") + " m";
             if (NavBridge.SelectedRunway == null)
