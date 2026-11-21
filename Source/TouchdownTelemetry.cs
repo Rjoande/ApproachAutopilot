@@ -5,9 +5,9 @@ namespace ApproachAutopilot
 {
     /// <summary>
     /// Landing log for the active vessel, whoever flies it: below StartHeight of gear height it writes a
-    /// sample every SamplePeriod, plus a line at every ground contact and lift-off, until AfterContact
-    /// seconds on the ground. Used to compare hand-flown and automatic landings. The same numbers are
-    /// shown in green at the top of the screen, under the altimeter.
+    /// sample every SamplePeriod, plus a line at every ground contact, lift-off and APR state change,
+    /// until the aircraft has slowed down on the ground. Used to compare hand-flown and automatic
+    /// landings. The same numbers are shown in green at the top of the screen, under the altimeter.
     /// </summary>
     internal sealed class TouchdownTelemetry
     {
@@ -15,7 +15,9 @@ namespace ApproachAutopilot
         const double StartHeight = 100.0;   // m of gear height to start recording
         const double ArmHeight = 120.0;     // m to climb above before the next recording
         const double SamplePeriod = 0.25;   // s
-        const double AfterContact = 5.0;    // s on the ground before the recording ends
+        const double AfterContact = 5.0;    // s on the ground before the recording may end
+        const double MaxGround = 60.0;      // s on the ground after which it ends anyway
+        const double StoppedSpeed = 1.0;    // m/s
         const double Rad2Deg = 180.0 / Math.PI;
 
         Guid vessel_id;
@@ -25,6 +27,8 @@ namespace ApproachAutopilot
         double first_contact_vs;
         double last_pitch;
         bool has_pitch;
+        readonly WheelContact wheels = new WheelContact();
+        ApproachController.ApproachState last_state;
 
         // on-screen copy: live sample, last contact, summary kept ShowAfter seconds after the end
         const float ShowAfter = 10.0f;
@@ -49,9 +53,9 @@ namespace ApproachAutopilot
             double gear = gear_known ? apr.gear_height : known_gear;
             double h = root >= 0.0 ? root - gear : double.PositiveInfinity;
             bool landed = v.LandedOrSplashed;
+            wheels.Update(v);
 
-            Vector3 up = FlightGlobals.getUpAxis(v.mainBody, v.vesselTransform.position);
-            double pitch = Math.Asin(Mathf.Clamp(Vector3.Dot(v.ReferenceTransform.up, up), -1.0f, 1.0f)) * Rad2Deg;
+            double pitch = ApproachController.PitchOf(v);
             double q = has_pitch && dt > 0.0 ? (pitch - last_pitch) / dt : 0.0;
             last_pitch = pitch;
             has_pitch = true;
@@ -66,9 +70,11 @@ namespace ApproachAutopilot
                 armed = on_ground = false;
                 t = next_sample = 0.0;
                 contacts = 0;
+                last_state = apr != null ? apr.state : ApproachController.ApproachState.Off;
                 screen_contact = "";
                 Debug.Log(Tag + "start: " + v.vesselName + ", gear height " + gear.ToString("0.00") + " m (" +
-                    (gear_known ? "APR" : known_gear > 0.0 ? "launch" : "unknown") + "), sign: pitch/q/aoa + = nose up, pcmd as KSP pitch input");
+                    (gear_known ? "APR" : known_gear > 0.0 ? "launch" : "unknown") +
+                    "), sign: pitch/q/aoa + = nose up, roll + = right wing down, pcmd/rcmd as KSP inputs, wog = wheels on the ground");
             }
 
             t += dt;
@@ -90,6 +96,11 @@ namespace ApproachAutopilot
             }
             if (on_ground)
                 ground_time += dt;
+            if (apr != null && apr.state != last_state)
+            {
+                last_state = apr.state;
+                Debug.Log(Tag + Line(v, apr, "STATE " + apr.state, h, pitch, q));
+            }
 
             if (t >= next_sample)
             {
@@ -101,7 +112,7 @@ namespace ApproachAutopilot
                     (apr != null && apr.state == ApproachController.ApproachState.Flare ? "   V/S cmd " + apr.desired_vspeed.ToString("0.0") : "");
             }
 
-            if (on_ground && ground_time >= AfterContact)
+            if (on_ground && ground_time >= AfterContact && (v.srfSpeed < StoppedSpeed || ground_time >= MaxGround))
             {
                 Debug.Log(Tag + "end: " + contacts + " contact(s), first at V/S " + first_contact_vs.ToString("0.00") + " m/s");
                 recording = false;
@@ -151,7 +162,12 @@ namespace ApproachAutopilot
                 "  aoa " + PitchAoA(v).ToString("+0.0;-0.0") +
                 "  thr " + (v.ctrlState.mainThrottle * 100.0f).ToString("0") +
                 "  pcmd " + v.ctrlState.pitch.ToString("+0.00;-0.00") +
-                (apr != null && apr.state == ApproachController.ApproachState.Flare ? "  vscmd " + apr.desired_vspeed.ToString("0.00") : "");
+                "  roll " + ApproachController.RollOf(v).ToString("+0.0;-0.0") +
+                "  rcmd " + v.ctrlState.roll.ToString("+0.00;-0.00") +
+                "  wog " + wheels.Grounded + "/" + wheels.Count +
+                "  brk " + (v.ActionGroups[KSPActionGroup.Brakes] ? "1" : "0") +
+                (apr != null && apr.state == ApproachController.ApproachState.Flare ? "  vscmd " + apr.desired_vspeed.ToString("0.00") : "") +
+                (apr != null && apr.state == ApproachController.ApproachState.Touchdown ? "  thref " + apr.GroundPitchRef.ToString("+0.0;-0.0") : "");
         }
 
         /// <summary>Pitch angle of attack in degrees, measured as AtmosphereAutopilot does (nose = transform up, belly = forward).</summary>
