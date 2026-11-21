@@ -48,9 +48,10 @@ namespace ApproachAutopilot
 
         #region State
 
-        // Final, Flare and Touchdown: below the decision height with autoland on (Touchdown also on any
-        // ground contact while APR flies). Minimums: handing the aircraft back, for one frame.
-        public enum ApproachState { Off, Armed, Localizer, Glideslope, Final, Flare, Touchdown, Minimums }
+        // Final and Flare: below the decision height with autoland on. Touchdown: on the wheels, lowering
+        // the nose with the ground laws. GoAround: climbing away at full throttle after a high bounce.
+        // Minimums: handing the aircraft back, for one frame.
+        public enum ApproachState { Off, Armed, Localizer, Glideslope, Final, Flare, Touchdown, GoAround, Minimums }
 
         public ApproachState state = ApproachState.Off;
 
@@ -166,7 +167,10 @@ namespace ApproachAutopilot
             thrust_c.Activate();
             imodel.Activate();
             steering = true;
+            ground.Reset();
             retard = false;
+            bounced = false;
+            landed_contact = false;
             pitch_limit_time = 0.0;
             pitch_limit_warned = false;
         }
@@ -287,6 +291,38 @@ namespace ApproachAutopilot
 
         [GlobalSerializable("touchdown_confirm")]
         public double touchdown_confirm = 1.0;
+
+        // On the wheels. Ground pitch: pitch of the craft parked on all its wheels, measured with the gear height.
+        [VesselSerializable("ground_pitch")]
+        public double ground_pitch = 0.0;           // deg
+
+        [VesselSerializable("ground_pitch_set")]
+        public bool ground_pitch_set = false;
+
+        [VesselSerializable("derotation_rate")]
+        public double derotation_rate = 2.0;        // deg/s
+
+        [GlobalSerializable("ground_kp")]
+        public double ground_kp = 4.0;              // 1/s2
+
+        [GlobalSerializable("ground_kd")]
+        public double ground_kd = 4.0;              // 1/s
+
+        [GlobalSerializable("ground_ki")]
+        public double ground_ki = 0.0;              // 1/s3
+
+        [GlobalSerializable("bounce_height")]
+        public double bounce_height = 3.0;          // m, a bounce above this is flown again
+
+        // Go-around: a bounce higher than go_around_bounce is not flared again, APR climbs away.
+        [VesselSerializable("go_around")]
+        public bool go_around = true;
+
+        [VesselSerializable("go_around_bounce")]
+        public double go_around_bounce = 10.0;      // m of gear height
+
+        [VesselSerializable("go_around_height")]
+        public double go_around_height = 300.0;     // m above the runway where the climb ends
 
         // Aim point offsets per runway (m down the runway beyond the glideslope antenna), for runways whose
         // published antenna sits on the threshold. Stored as "body/ident:metres|..." in the global settings.
@@ -432,9 +468,19 @@ namespace ApproachAutopilot
         internal double ground_dist = -1.0;     // root part to the ground below, m, -1 when out of reach
         internal double gear_above;             // gear above the runway: ground below if at runway level, else runway elevation, m
 
+        readonly WheelContact wheels = new WheelContact();
+        bool on_wheels;             // a wheel on the ground (no stock wheels, or landing on skids: landed)
+        bool other_contact;         // landed or splashed on something that is not a wheel
+        bool landed_contact;        // this landing is on skids or the belly: the landed flag is the contact
+
+        const double NoWheelConfirm = 0.3;  // s on the ground without wheels before it counts as the landing
+
         void UpdateNavigation()
         {
             ground_dist = RootAboveGround(vessel);
+            wheels.Update(vessel);
+            on_wheels = wheels.OnWheels(vessel) || (landed_contact && vessel.LandedOrSplashed);
+            other_contact = vessel.LandedOrSplashed && !on_wheels;
             nav = NavBridge.Update();
             RunwayInfo rwy = NavBridge.SelectedRunway;
             if (!nav.valid || rwy == null)
@@ -483,11 +529,29 @@ namespace ApproachAutopilot
             return -1.0;
         }
 
-        internal void SetGearHeight(double h, string source)
+        /// <summary>Both measured with the craft parked on all its wheels: root part height and pitch.</summary>
+        internal void SetGearHeight(double h, double pitch, string source)
         {
             gear_height = h;
             gear_height_set = true;
-            Debug.Log(Tag + "gear height " + h.ToString("0.00") + " m (" + source + ") on " + vessel.vesselName);
+            ground_pitch = pitch;
+            ground_pitch_set = true;
+            Debug.Log(Tag + "gear height " + h.ToString("0.00") + " m, ground pitch " + pitch.ToString("+0.0;-0.0") +
+                " deg (" + source + ") on " + vessel.vesselName);
+        }
+
+        /// <summary>Pitch of the nose above the horizon, degrees.</summary>
+        internal static double PitchOf(Vessel v)
+        {
+            Vector3 up = FlightGlobals.getUpAxis(v.mainBody, v.vesselTransform.position);
+            return Math.Asin(Mathf.Clamp(Vector3.Dot(v.ReferenceTransform.up, up), -1.0f, 1.0f)) * Rad2Deg;
+        }
+
+        /// <summary>Bank angle, degrees, + = right wing down.</summary>
+        internal static double RollOf(Vessel v)
+        {
+            Vector3 up = FlightGlobals.getUpAxis(v.mainBody, v.vesselTransform.position);
+            return Math.Atan2(-Vector3.Dot(v.ReferenceTransform.right, up), -Vector3.Dot(v.ReferenceTransform.forward, up)) * Rad2Deg;
         }
 
         /// <summary>Gear height at which the flare starts: where the flare law meets the current sink rate.</summary>
@@ -587,8 +651,12 @@ namespace ApproachAutopilot
         #region State machine
 
         double hold_altitude;       // altitude held while on the localizer, waiting for the glideslope
-        ApproachState resume_state; // state to go back to if the aircraft bounces off the ground
-        double contact_time;        // s of continuous ground contact
+        ApproachState resume_state; // state to go back to if the aircraft bounces high off the ground
+        double contact_time;        // s of continuous wheel contact
+        double air_time;            // s off the wheels after a contact
+        double other_time;          // s landed on something that is not a wheel
+        bool light_bounce;
+        bool bounced;               // left the runway again after a wheel contact, on this approach
         string handover_message = "";
 
         void UpdateState()
@@ -603,14 +671,37 @@ namespace ApproachAutopilot
             }
             double loc = Math.Abs(nav.locDeviation);
             double gs = Math.Abs(nav.gsDeviation);
-            if (vessel.LandedOrSplashed && (state == ApproachState.Localizer || state == ApproachState.Glideslope ||
-                state == ApproachState.Final || state == ApproachState.Flare))
+            bool flying = state == ApproachState.Localizer || state == ApproachState.Glideslope ||
+                state == ApproachState.Final || state == ApproachState.Flare;
+            if (flying && other_contact)
+            {
+                // a tail strike is over at once; skids or the belly stay down, and from then on
+                // the vessel's own landed flag is the contact for this landing
+                if (other_time == 0.0)
+                    Debug.Log(Tag + "contact without wheels in " + state + " (V/S " + vessel.verticalSpeed.ToString("0.00") +
+                        " m/s, pitch " + PitchOf(vessel).ToString("+0.0;-0.0") + " deg)");
+                other_time += TimeWarp.fixedDeltaTime;
+                if (other_time >= NoWheelConfirm)
+                {
+                    landed_contact = true;
+                    on_wheels = true;
+                    other_contact = false;
+                }
+            }
+            else
+                other_time = 0.0;
+            if (flying && on_wheels)
             {
                 resume_state = state;
-                contact_time = 0.0;
+                contact_time = air_time = other_time = 0.0;
+                light_bounce = false;
                 state = ApproachState.Touchdown;
-                Debug.Log(Tag + "ground contact in " + resume_state + " (V/S " + vessel.verticalSpeed.ToString("0.00") +
-                    " m/s, spd " + vessel.srfSpeed.ToString("0") + " m/s, gear above " + gear_above.ToString("0.0") + " m)");
+                ground.Begin(PitchOf(vessel), TimeWarp.fixedDeltaTime);
+                Debug.Log(Tag + (landed_contact ? "contact (no wheels: skids or belly) in " : "wheel contact in ") + resume_state +
+                    " (V/S " + vessel.verticalSpeed.ToString("0.00") +
+                    " m/s, spd " + vessel.srfSpeed.ToString("0") + " m/s, pitch " + PitchOf(vessel).ToString("+0.0;-0.0") +
+                    " deg, wheels " + wheels.Grounded + "/" + wheels.Count + ", elevator " + ground.Trim.ToString("+0.00;-0.00") +
+                    ", ground pitch " + (ground_pitch_set ? ground_pitch.ToString("+0.0;-0.0") : "unknown") + ")");
                 if (autoland)
                     StartRetard(true);
                 return;
@@ -687,7 +778,9 @@ namespace ApproachAutopilot
                 // antenna its angle grows large while the vertical error stays small
                 case ApproachState.Final:
                 case ApproachState.Flare:
-                    if (loc > 3.0 * loc_capture_deg)
+                    if (bounced && autoland && go_around && gear_above > go_around_bounce)
+                        StartGoAround("bounced to " + gear_above.ToString("0") + " m");
+                    else if (loc > 3.0 * loc_capture_deg)
                         HandOverNext("localizer lost below minimums", "LOC lost - autopilot disconnected");
                     else if (terrain_high)
                         HandOverNext("terrain below minimums", "TERRAIN - autopilot disconnected");
@@ -696,26 +789,68 @@ namespace ApproachAutopilot
                         Transition(ApproachState.Flare, "FLARE");
                         StartRetard(false);
                     }
+                    else if (state == ApproachState.Flare && !retard && gear_above <= FlareHeight())
+                        StartRetard(false);     // flaring again after a bounce
                     break;
 
                 case ApproachState.Touchdown:
-                    if (!vessel.LandedOrSplashed)
+                    if (on_wheels)
                     {
-                        state = resume_state;
-                        MessageManager.post_status_message("APR: bounce");
-                        Debug.Log(Tag + "airborne again after " + contact_time.ToString("0.00") + " s, back to " + state);
-                    }
-                    else
-                    {
+                        air_time = 0.0;
                         contact_time += TimeWarp.fixedDeltaTime;
-                        if (contact_time >= touchdown_confirm)
+                        // without autoland the aircraft goes back as soon as the contact is confirmed
+                        if (!autoland && contact_time >= touchdown_confirm)
                             HandOverNext("TOUCHDOWN", "TOUCHDOWN - autopilot disconnected");
+                        else if (autoland && ground.NoseDown)
+                            HandOverNext(ground.NoseStopped ? "TOUCHDOWN, nose stopped at " + PitchOf(vessel).ToString("+0.0;-0.0") + " deg"
+                                : "TOUCHDOWN, nose down", "TOUCHDOWN - autopilot disconnected");
+                        break;
+                    }
+                    contact_time = 0.0;
+                    air_time += TimeWarp.fixedDeltaTime;
+                    if (gear_above <= bounce_height && air_time < touchdown_confirm)
+                    {
+                        // light bounce: the ground laws keep the attitude until the wheels are back
+                        if (!light_bounce)
+                            Debug.Log(Tag + "light bounce, holding attitude (V/S " + vessel.verticalSpeed.ToString("0.00") + " m/s)");
+                        light_bounce = true;
+                        break;
+                    }
+                    light_bounce = false;
+                    bounced = true;
+                    double climb = Math.Max(vessel.verticalSpeed, 0.0);
+                    double apex = gear_above + climb * climb / (2.0 * Math.Max(vessel.graviticAcceleration.magnitude, 1.0));
+                    if (autoland && go_around && apex > go_around_bounce)
+                    {
+                        StartGoAround("bouncing to " + apex.ToString("0") + " m");
+                        break;
+                    }
+                    state = resume_state;
+                    if (retard && gear_above > FlareHeight())
+                        retard = false;     // back on speed until the flare starts again
+                    MessageManager.post_status_message("APR: bounce");
+                    Debug.Log(Tag + "bounce: airborne " + air_time.ToString("0.00") + " s, gear above " + gear_above.ToString("0.0") +
+                        " m, V/S " + vessel.verticalSpeed.ToString("0.00") + " m/s, back to " + state + (retard ? "" : ", retard cancelled"));
+                    break;
+
+                case ApproachState.GoAround:
+                    if (height_above_runway >= go_around_height)
+                    {
+                        Transition(ApproachState.Armed, "go-around complete, still armed: fly the pattern");
+                        HandBack(true);
                     }
                     break;
 
                 case ApproachState.Minimums:
                     break;
             }
+        }
+
+        /// <summary>Full throttle and a climb along the runway up to go_around_height, then back to armed.</summary>
+        void StartGoAround(string reason)
+        {
+            retard = false;
+            Transition(ApproachState.GoAround, "GO AROUND (" + reason + ")");
         }
 
         void TooFastGate()
@@ -796,16 +931,50 @@ namespace ApproachAutopilot
                 Handover();
                 return;
             }
-            // on the ground AA has nothing to fly with: only the throttle stays at idle after RETARD
-            if (state == ApproachState.Touchdown || vessel.LandedOrSplashed)
+            if (state == ApproachState.Touchdown)
             {
-                if (retard)
-                    cntrl.mainThrottle = last_throttle = RetardThrottle();
+                GroundControl(cntrl);
                 return;
             }
             if (steering)
                 Steer(cntrl);
         }
+
+        readonly GroundLaws ground = new GroundLaws();
+
+        /// <summary>
+        /// On the wheels (and through a light bounce) AA has nothing to fly with: the ground laws lower
+        /// the nose and level the wings, the throttle stays at idle after RETARD. Yaw is the pilot's.
+        /// </summary>
+        void GroundControl(FlightCtrlState cntrl)
+        {
+            if (retard)
+                cntrl.mainThrottle = last_throttle = RetardThrottle();
+            ground.kp = ground_kp;
+            ground.kd = ground_kd;
+            ground.ki = ground_ki;
+            ground.derotation_rate = derotation_rate;
+            ground.ground_pitch = ground_pitch;
+            ground.ground_pitch_known = ground_pitch_set;
+            ground.Apply(cntrl, PitchOf(vessel), imodel.AngularVel(ControlUtils.PITCH), RollOf(vessel), imodel.AngularVel(ControlUtils.ROLL),
+                imodel.dyn_pressure, on_wheels, wheels.Count > 0 && wheels.Grounded == wheels.Count, TimeWarp.fixedDeltaTime);
+        }
+
+        /// <summary>Angular acceleration per unit of control input, as AA's own acceleration controllers read it.</summary>
+        double Authority(LinearSystemModel far, LinearSystemModel stock, int row)
+        {
+            bool is_far = global::AtmosphereAutopilot.AtmosphereAutopilot.AeroModel == global::AtmosphereAutopilot.AtmosphereAutopilot.AerodinamycsModel.FAR;
+            return (is_far ? far : stock).B[row, 0];
+        }
+
+        internal string GroundText()
+        {
+            return (ground.Lowering ? "derotation" : "holding") + ": pitch ref " + ground.PitchRef.ToString("+0.0;-0.0") + " deg" +
+                (ground.ModelValid ? "" : " (no model)");
+        }
+
+        internal double GroundPitchRef { get { return ground.PitchRef; } }
+        internal bool OnWheels { get { return on_wheels; } }
 
         /// <summary>
         /// Lateral: pure pursuit on the extended centerline, intercept angle limited. Vertical: altitude
@@ -814,7 +983,9 @@ namespace ApproachAutopilot
         /// </summary>
         void Steer(FlightCtrlState cntrl)
         {
-            if (apr_speed_control)
+            if (state == ApproachState.GoAround)
+                cntrl.mainThrottle = last_throttle = 1.0f;     // whoever had the throttle on the approach
+            else if (apr_speed_control)
             {
                 if (retard)
                     cntrl.mainThrottle = RetardThrottle();
@@ -822,7 +993,7 @@ namespace ApproachAutopilot
                     ApplySpeed(cntrl);
                 last_throttle = cntrl.mainThrottle;
             }
-            bool below_minimums = state == ApproachState.Final || state == ApproachState.Flare;
+            bool below_minimums = state == ApproachState.Final || state == ApproachState.Flare || state == ApproachState.GoAround;
 
             Vector3d planet2ves = vessel.ReferenceTransform.position - vessel.mainBody.position;
             Vector3d hor_v = Vector3d.Exclude(up, imodel.surface_v);
@@ -850,7 +1021,22 @@ namespace ApproachAutopilot
                 // -vz / tau is the rate of change of that command, fed forward
                 double tau = Math.Max(flare_tau, 0.5);
                 desired_vspeed = -(Math.Max(gear_above, 0.0) / tau + touchdown_sink);
-                vert_acc_mag = -vz / tau + flare_gain * (desired_vspeed - vz);
+                // high above the runway after a bounce: never steeper than the final descent
+                double steepest = -vh * Math.Tan((nav.glideslope + fpa_margin) * Deg2Rad);
+                if (desired_vspeed < steepest)
+                {
+                    desired_vspeed = steepest;
+                    vert_acc_mag = flare_gain * (desired_vspeed - vz);
+                }
+                else
+                    vert_acc_mag = -vz / tau + flare_gain * (desired_vspeed - vz);
+            }
+            else if (state == ApproachState.GoAround)
+            {
+                // level off first, then climb as the speed comes back towards the approach speed
+                double k = Common.Clamp((vessel.srfSpeed / Math.Max(vref, 1.0) - GoAroundSlow) / (1.0 - GoAroundSlow), 0.0, 1.0);
+                desired_vspeed = k * vh * Math.Tan(GoAroundClimbDeg * Deg2Rad);
+                vert_acc_mag = vspeed_gain * (desired_vspeed - vz);
             }
             else if (state == ApproachState.Final)
             {
@@ -885,7 +1071,12 @@ namespace ApproachAutopilot
             dir_c.ApplyControl(cntrl, desired_velocity, level_acc + vert_acc);
             dir_c.strength = old_strength;
             WatchPitchAuthority(cntrl);
+            ground.RecordFlight(cntrl, Authority(imodel.pitch_rot_model, imodel.pitch_rot_model_undelayed, 1),
+                Authority(imodel.roll_rot_model, imodel.roll_rot_model_undelayed, 0), imodel.dyn_pressure);
         }
+
+        const double GoAroundClimbDeg = 6.0;    // climb angle of the go-around at the approach speed or faster
+        const double GoAroundSlow = 0.8;        // fraction of the approach speed below which it only levels off
 
         const double PitchLimitInput = 0.95;    // |pitch input| counted as the elevator at its stop
         const double PitchLimitTime = 1.0;      // s at the stop before the warning
@@ -1031,6 +1222,7 @@ namespace ApproachAutopilot
                 case ApproachState.Final: return "FINAL - " + (flare ? "flare armed" : "no flare");
                 case ApproachState.Flare: return "FLARE";
                 case ApproachState.Touchdown: return "TOUCHDOWN";
+                case ApproachState.GoAround: return "GO AROUND";
                 case ApproachState.Minimums: return "MINIMUMS";
                 default: return "off";
             }
@@ -1048,7 +1240,7 @@ namespace ApproachAutopilot
             if (!steering)
                 return (cruise.Active ? cruise.ModuleName : fbw.Active ? fbw.ModuleName : "pilot") + " flies";
             if (state == ApproachState.Touchdown)
-                return "on the ground: " + contact_time.ToString("0.0") + " of " + touchdown_confirm.ToString("0.0") + " s";
+                return on_wheels ? "on the wheels, " + GroundText() : "bounce, " + GroundText();
             if (state == ApproachState.Localizer)
                 return "APR flies: hdg " + desired_heading.ToString("000") + "   hold " + hold_altitude.ToString("0") + " m   V/S " + desired_vspeed.ToString("+0.0;-0.0");
             return "APR flies: hdg " + desired_heading.ToString("000") + "   V/S " + desired_vspeed.ToString("+0.0;-0.0") + " m/s";
@@ -1079,7 +1271,7 @@ namespace ApproachAutopilot
         string ThrottleOwner()
         {
             if (steering)
-                return apr_speed_control ? "APR" : "pilot";
+                return apr_speed_control || state == ApproachState.GoAround ? "APR" : "pilot";
             return thrust_c.Active && thrust_c.spd_control_enabled ? "AA" : "pilot";
         }
 
