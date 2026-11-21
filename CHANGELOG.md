@@ -7,14 +7,16 @@
   - **Air Force style** (*Flare* on, default): an automatic flare that slows the descent down to about 0.6 m/s at touchdown.
   - **Navy style** (*Flare* off): no flare, the glideslope is flown all the way to the deck.
 - With *APR speed control* on, **RETARD** brings the throttle to idle (5% by default, per craft) at the start of the flare, or at touchdown in Navy style.
-- After one second on the ground APR says *TOUCHDOWN* and hands the aircraft back like at minimums; if the aircraft bounces before that, APR keeps flying. Derotation, steering on the runway and braking stay with you.
-- **Autoland window** (*settings* next to the Autoland button): flare, touchdown sink rate, idle throttle and the **gear height**, measured by itself when the craft sits on the launch site, or with *Set gear height* whenever you are parked.
+- **Derotation**: when the wheels touch, APR keeps the elevator where it was in flight (no sudden release) and lowers the nose gently (2 deg/s by default, per craft) with the wings level. With the nose wheel down it says *TOUCHDOWN* and hands the aircraft back like at minimums. Steering on the runway and braking stay with you.
+- **Bounces**: a small hop (under 3 m) is ridden out holding the attitude; a higher one is flared again, back on speed until the new flare.
+- **Go-around on a high bounce** (on by default, per craft): if the aircraft bounces above 10 m APR calls *GO AROUND*, sets full throttle (even when the throttle was yours) and climbs straight ahead over the runway to 300 m, then gives the aircraft back to Cruise Flight or Fly-By-Wire and stays armed for the next approach. Switch it to *flare again* in the Autoland window if you prefer.
+- **Autoland window** (*settings* next to the Autoland button): flare, touchdown sink rate, idle throttle, derotation rate, go-around, and the **gear height** and **ground pitch**, measured by themselves when the craft sits on the launch site, or with *Set gear height* whenever you are parked.
 - **Aim point per runway**: some runway definitions put the glideslope antenna right on the threshold, so the aircraft touches down at the very start of the runway. In the Autoland window you can move the aim point down the runway for the tuned runway (e.g. 300 m); APR shifts its path gradually below the decision height. Saved per runway.
 - Below the decision height APR trusts the ground below (radar) over the published runway elevation, and disconnects with *TERRAIN* if the ground is well above runway level.
 - **Pitch authority warning**: if the elevator stays at its stop for a second while APR flies, APR says so (*raise speed at DH*): there is no margin left for the flare.
 
 ### Fixed
-- An aircraft touching the ground before the decision height no longer leaves APR stuck in the manager: it hands over after one second on the ground.
+- An aircraft touching the ground before the decision height no longer leaves APR stuck in the manager: it hands over once it is down.
 
 ### Changed
 - **Default decision height is now 60 m** (about 200 ft, the usual ILS minimum) instead of 30 m: more room for a gentle flare without ballooning. Craft you already flew with APR keep their saved value; set *decision height* to 60 in the Approach window to switch them.
