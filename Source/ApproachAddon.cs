@@ -9,7 +9,7 @@ namespace ApproachAutopilot
     /// Per-frame flight addon for the Approach controller of the active vessel. AtmosphereAutopilot
     /// updates only the controller in the seat, while an armed APR watches for capture from the
     /// background and its hotkey must work whatever autopilot is flying. It also measures the gear
-    /// height at launch, when AA may not have created the controller yet.
+    /// height and the ground pitch at launch, when AA may not have created the controller yet.
     /// </summary>
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class ApproachAddon : MonoBehaviour
@@ -36,7 +36,7 @@ namespace ApproachAutopilot
             if (launch_gear.TryGetValue(v.id, out h))
             {
                 launch_gear.Remove(v.id);
-                apr.SetGearHeight(h, "measured at launch");
+                apr.SetGearHeight(h, launch_pitch[v.id], "measured at launch");
             }
 
             if (!apr.Active)
@@ -89,16 +89,20 @@ namespace ApproachAutopilot
             telemetry.FixedUpdate(v, GetController(aa.getVesselModules(v)), gear);
         }
 
-        // Gear height measured on the launch site, waiting for the vessel's controller to exist;
-        // launch_value keeps it for the landing log of craft that never create the controller.
+        // Gear height and pitch measured on the launch site, waiting for the vessel's controller to exist;
+        // launch_value keeps the height for the landing log of craft that never create the controller.
         readonly Dictionary<Guid, double> launch_gear = new Dictionary<Guid, double>();
+        readonly Dictionary<Guid, double> launch_pitch = new Dictionary<Guid, double>();
         readonly Dictionary<Guid, double> launch_value = new Dictionary<Guid, double>();
         readonly HashSet<Guid> measured = new HashSet<Guid>();
         float still_time;
 
         const float SettleTime = 1.0f;      // s parked and settled before measuring
 
-        /// <summary>Parked on the launch site the gear is exactly at zero: the root part height above the ground is the gear height.</summary>
+        /// <summary>
+        /// Parked on the launch site the gear is exactly at zero: the root part height above the ground is the
+        /// gear height, and the pitch is the one the nose comes down to after landing.
+        /// </summary>
         void WatchLaunch(Vessel v)
         {
             if (measured.Contains(v.id))
@@ -117,7 +121,9 @@ namespace ApproachAutopilot
             measured.Add(v.id);
             launch_gear[v.id] = h;
             launch_value[v.id] = h;
-            Debug.Log(Tag + "gear height at launch: " + h.ToString("0.00") + " m (" + v.vesselName + ")");
+            launch_pitch[v.id] = ApproachController.PitchOf(v);
+            Debug.Log(Tag + "at launch: gear height " + h.ToString("0.00") + " m, ground pitch " +
+                launch_pitch[v.id].ToString("+0.0;-0.0") + " deg (" + v.vesselName + ")");
         }
 
         static ApproachController GetController(Dictionary<Type, AutopilotModule> modules)
